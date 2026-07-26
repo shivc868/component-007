@@ -20,7 +20,8 @@ if (SMOOTH_SCROLL && !window.lenis) {
 const CONFIG = {
   SCROLL_PER_SLIDE: 1, // viewport heights of scroll each transition takes
   SCRUB: 0.6, // seconds the animation lags the scrollbar — 0 to lock to it
-  PARALLAX_MEDIA: 10, // how far the photo drifts. Keep under --mfa-overscan
+  PARALLAX_MEDIA: 10, // how far the photo drifts — raising it needs a bigger
+  //                     --mfa-overscan in style.css; the rule is written there
   PARALLAX_COPY: 4.5, // and the text drifts less, which is what reads as depth
   SPLIT_SHIFT: 9, // how far the two halves of the text slide past each other
   TEXT_SPAN: 0.8, // share of a change the text takes; 1 finishes with the wipe

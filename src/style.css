@@ -17,9 +17,20 @@
   --mfa-bg: #08080a; /* near-black ground */
   --mfa-ink: #f4f4f0; /* off-white, the chrome */
   --mfa-veil: 0.66; /* how far the photos sink toward the ground colour */
-  /* headroom above and below the frame for the parallax drift to move into;
-     must stay larger than CONFIG.PARALLAX_MEDIA in main.js */
-  --mfa-overscan: 12%;
+  /* Headroom above and below the frame for the parallax drift to move into.
+
+     It is NOT simply "bigger than PARALLAX_MEDIA": the two are in different
+     units. This value is a share of the FRAME, while GSAP's yPercent is a
+     share of the photo's OWN height — and the overscan is what makes the photo
+     taller than the frame in the first place. So the drift really travels
+     PARALLAX_MEDIA x (1 + 2 x overscan) of the frame, and the rule is
+
+         overscan  >=  PARALLAX_MEDIA / (1 - 2 x PARALLAX_MEDIA)
+
+     At PARALLAX_MEDIA 10 that means 12.5% minimum; 16% leaves room to raise it
+     as far as 12. Go under and a bare strip of backdrop shows along the photo's
+     top or bottom edge at the extremes of the drift. */
+  --mfa-overscan: 16%;
   --mfa-gutter: clamp(16px, 2.2vw, 44px);
   --mfa-edge: clamp(14px, 2.2vh, 30px);
   --mfa-micro: clamp(9px, 0.72vw, 13px); /* chrome, kicker, status, cta */
@@ -125,13 +136,11 @@
   inset: 0;
   margin: 0;
   overflow: hidden;
-  will-change: transform;
 }
 
 .mfa-reel__inner {
   position: absolute;
   inset: 0;
-  will-change: transform;
 }
 
 /* ----- media -----
@@ -152,7 +161,6 @@
   bottom: calc(var(--mfa-overscan) * -1);
   left: 0;
   display: flex;
-  will-change: transform;
 }
 
 .mfa-reel__img {
@@ -192,7 +200,6 @@
 .mfa-reel__copy {
   position: absolute;
   inset: 0;
-  will-change: transform, opacity;
 }
 
 /* The content is rendered twice and each copy clipped to one half of itself —
@@ -219,7 +226,6 @@
   padding: calc(var(--mfa-edge) * 2.6) var(--mfa-gutter);
   color: var(--mfa-accent);
   text-align: center;
-  will-change: transform;
 }
 
 /* Cut by position, so main.js needs no marker classes: main.js clones the
