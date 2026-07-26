@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://images.unsplash.com" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Raleway:wght@400..600&family=Manrope:wght@400..600&family=Space+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <title>component-007</title>
+  </head>
+  <body>
+    <!--
+      REEL — the component.
+
+      A pinned full-frame showreel. The viewport is split into two columns:
+      the next slide wipes DOWN in the right column and UP in the left one, a
+      beat later. Each column holds its own full-width copy of every slide and
+      only clips it, so the incoming headline reads straight across the split
+      even while the two halves sit at different points in the wipe.
+
+      The outgoing headline lives in its own layer above both columns and holds
+      at full strength right through the overlap, then hard-cuts the instant
+      the wipe lands. Two headlines in two accent colours, briefly on top of
+      each other — that collision is the whole trick.
+
+      Slides come from the CONTENT array at the top of src/main.js; both
+      columns are built from it, so adding or removing one needs no edits here.
+    -->
+    <section class="mfa-reel" aria-label="Selected work">
+      <div class="mfa-reel__pin" data-mfa-pin>
+        <div class="mfa-reel__half mfa-reel__half--left" data-mfa-half="left">
+          <div class="mfa-reel__stage" data-mfa-stage="left"></div>
+        </div>
+        <div class="mfa-reel__half mfa-reel__half--right" data-mfa-half="right">
+          <div class="mfa-reel__stage" data-mfa-stage="right"></div>
+        </div>
+
+        <!-- current slide's copy: unclipped, above both columns, and the only
+             copy that is interactive or exposed to assistive tech -->
+        <div class="mfa-reel__front" data-mfa-front></div>
+
+        <nav class="mfa-reel__chrome mfa-reel__chrome--top" aria-label="Primary">
+          <a class="mfa-reel__chrome-item" href="#work">Work</a>
+          <a class="mfa-reel__chrome-item" href="#info">Info</a>
+          <a class="mfa-reel__chrome-item" href="#contact">Contact us</a>
+        </nav>
+
+        <p class="mfa-reel__chrome mfa-reel__chrome--bottom" aria-hidden="true">
+          <span class="mfa-reel__chrome-item">Glitch</span>
+          <span class="mfa-reel__chrome-item">&amp;</span>
+          <span class="mfa-reel__chrome-item">Grit</span>
+        </p>
+      </div>
+    </section>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

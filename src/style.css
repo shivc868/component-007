@@ -1,0 +1,430 @@
+/* ==========================================================================
+   REEL — split-column wipe showreel
+   --------------------------------------------------------------------------
+   Everything is scoped under .mfa-reel: no global resets, no :root variables,
+   no generic class names. Safe to paste into any host page.
+   main.js owns transforms and visibility; this file owns looks and geometry.
+   ========================================================================== */
+
+.mfa-reel,
+.mfa-reel *,
+.mfa-reel *::before,
+.mfa-reel *::after {
+  box-sizing: border-box;
+}
+
+.mfa-reel {
+  --mfa-bg: #08080a; /* near-black ground */
+  --mfa-ink: #f4f4f0; /* off-white, the chrome */
+  --mfa-veil: 0.66; /* how far the photos sink toward the ground colour */
+  /* headroom above and below the frame for the parallax drift to move into;
+     must stay larger than CONFIG.PARALLAX_MEDIA in main.js */
+  --mfa-overscan: 12%;
+  --mfa-gutter: clamp(16px, 2.2vw, 44px);
+  --mfa-edge: clamp(14px, 2.2vh, 30px);
+  --mfa-micro: clamp(9px, 0.72vw, 13px); /* chrome, kicker, status, cta */
+  --mfa-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Helvetica, Arial, sans-serif;
+  /* per-slide, written inline by main.js from CONTENT[].accent */
+  --mfa-accent: #f4f4f0;
+
+  position: relative;
+  display: block;
+  background: var(--mfa-bg);
+  font-family: var(--mfa-sans);
+  /* internal z-indexes stay inside this stacking context — they can never
+     fight the host page's header or modals */
+  isolation: isolate;
+}
+
+/* ----- pinned viewport -----
+   ScrollTrigger pins this. Nothing inside ever scrolls; the columns clip and
+   the slides move under transform only. */
+.mfa-reel__pin {
+  position: relative;
+  width: 100%;
+  height: 100svh;
+  overflow: clip;
+}
+
+/* ----- the two columns -----
+   Each is a 50%-wide window. The stage inside is twice the window's width, so
+   it always spans the full frame regardless of how the host sizes us — the
+   right one is pulled back by its own width so both stages land on the same
+   pixels. That is what lets a headline read across the split. */
+.mfa-reel__half {
+  position: absolute;
+  top: 0;
+  width: 50%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none; /* the front layer takes all input */
+}
+
+.mfa-reel__half--left {
+  left: 0;
+}
+
+.mfa-reel__half--right {
+  left: 50%;
+}
+
+.mfa-reel__stage {
+  position: absolute;
+  top: 0;
+  width: 200%;
+  height: 100%;
+}
+
+.mfa-reel__half--left .mfa-reel__stage {
+  left: 0;
+}
+
+.mfa-reel__half--right .mfa-reel__stage {
+  left: -100%;
+}
+
+/* ----- slides -----
+   The slide is the mask and __inner is the counter-mover: main.js slides the
+   mask in from off-frame and pushes __inner the opposite way by the same
+   amount, so the content never actually travels — it is uncovered in place.
+   Cheaper and smoother than animating clip-path, and it composites on the GPU.
+   Later slides paint over earlier ones by DOM order; no z-index juggling. */
+.mfa-reel__slide {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  overflow: hidden;
+  will-change: transform;
+}
+
+.mfa-reel__inner {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+
+/* ----- media -----
+   __media-inner stands taller than the frame on both edges so main.js can
+   drift it vertically without pulling the photo's own edge into view. __media
+   clips that headroom back off. A slide may carry one or two images. */
+.mfa-reel__media {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #14141a; /* holds the frame before the photo decodes */
+}
+
+.mfa-reel__media-inner {
+  position: absolute;
+  top: calc(var(--mfa-overscan) * -1);
+  right: 0;
+  bottom: calc(var(--mfa-overscan) * -1);
+  left: 0;
+  display: flex;
+  will-change: transform;
+}
+
+.mfa-reel__img {
+  flex: 1 1 0;
+  width: 0; /* let flex-basis decide; stops wide images forcing overflow */
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Deliberately uneven: an even split would put the seam between two photos
+   exactly on the column split, and the wipe would read as an image edge. */
+.mfa-reel__img:first-child {
+  flex-grow: 1.32;
+}
+
+/* Flat scrim plus a soft vignette — the type is thin at the kicker sizes and
+   needs the photo held well back to stay legible on any image. */
+.mfa-reel__veil {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      120% 90% at 50% 50%,
+      rgba(0, 0, 0, 0) 30%,
+      rgba(0, 0, 0, 0.6) 100%
+    ),
+    rgba(8, 8, 10, var(--mfa-veil));
+  pointer-events: none;
+}
+
+/* ----- copy -----
+   Sized to the whole frame, so it is centred on the viewport rather than on a
+   column and both columns stay in register mid-wipe. This element carries the
+   block-level drift; the layers inside carry the split. */
+.mfa-reel__copy {
+  position: absolute;
+  inset: 0;
+  will-change: transform, opacity;
+}
+
+/* The content is rendered twice and each copy clipped to one half of itself,
+   so the two are complementary: together they are the whole, and neither ever
+   draws what the other does. The clip sits on the same element as the
+   transform on purpose — it travels with its half, which is what lets the two
+   pieces tear apart cleanly and close back into one.
+
+   (Putting the cut on a static parent instead looks equivalent at rest but is
+   not: each half then shows a fixed slice of the *frame*, so once they move,
+   content near the cut line satisfies both and gets drawn twice.)
+
+   The top half overruns the midline by half a pixel so the seam cannot open on
+   fractional device pixels when the two meet. */
+.mfa-reel__copy-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--mfa-edge) * 2.6) var(--mfa-gutter);
+  color: var(--mfa-accent);
+  text-align: center;
+  will-change: transform;
+}
+
+.mfa-reel__copy-layer--top {
+  clip-path: inset(0 0 calc(50% - 0.5px) 0);
+}
+
+.mfa-reel__copy-layer--bottom {
+  clip-path: inset(50% 0 0 0);
+}
+
+.mfa-reel__kicker,
+.mfa-reel__status {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  font-size: var(--mfa-micro);
+  font-weight: 700;
+  line-height: 1.42;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+/* Lines never wrap — the break is wherever CONTENT[].title puts it — so
+   main.js measures the widest one and writes --mfa-title-size to fit the
+   frame. The clamp is only the pre-measurement fallback. */
+.mfa-reel__title {
+  margin: clamp(10px, 2vh, 26px) 0;
+  font-size: var(--mfa-title-size, clamp(2.4rem, 12.4vw, 15.5rem));
+  font-weight: 900;
+  line-height: 0.78;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
+}
+
+.mfa-reel__line {
+  display: block;
+  white-space: nowrap;
+}
+
+.mfa-reel__cta {
+  margin-top: clamp(14px, 3.4vh, 42px);
+  color: inherit;
+  font-size: var(--mfa-micro);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
+  padding-bottom: 2px;
+  opacity: 0.85;
+  transition: opacity 0.25s ease;
+}
+
+.mfa-reel__cta:hover,
+.mfa-reel__cta:focus-visible {
+  opacity: 1;
+}
+
+/* ----- front layer -----
+   Holds one copy per slide, only the current one visible. Above both columns,
+   so the outgoing headline stays whole while the wipe runs under it. */
+.mfa-reel__front {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.mfa-reel__front .mfa-reel__cta {
+  pointer-events: auto;
+}
+
+/* ----- chrome -----
+   Site frame, not part of the reel: one copy, never clipped, always on top. */
+.mfa-reel__chrome {
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin: 0;
+  padding: 0 var(--mfa-gutter);
+  color: var(--mfa-ink);
+  font-size: var(--mfa-micro);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.mfa-reel__chrome--top {
+  top: var(--mfa-edge);
+}
+
+.mfa-reel__chrome--bottom {
+  bottom: var(--mfa-edge);
+}
+
+.mfa-reel__chrome-item {
+  flex: 1 1 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.mfa-reel__chrome-item:nth-child(2) {
+  text-align: center;
+}
+
+.mfa-reel__chrome-item:last-child {
+  text-align: right;
+}
+
+a.mfa-reel__chrome-item {
+  opacity: 0.9;
+  transition: opacity 0.25s ease;
+}
+
+a.mfa-reel__chrome-item:hover,
+a.mfa-reel__chrome-item:focus-visible {
+  opacity: 1;
+}
+
+/* ----- narrow screens -----
+   Two columns on a phone would leave slivers too thin to read a wipe in, so
+   the split goes horizontal instead: the incoming slide wipes in from the
+   right in the top band and from the left in the bottom one. Same idea,
+   rotated — handled by main.js swapping which axis it animates. */
+@media (max-width: 700px) {
+  .mfa-reel {
+    --mfa-micro: 10px;
+  }
+
+  .mfa-reel__half {
+    width: 100%;
+    height: 50%;
+  }
+
+  .mfa-reel__half--left {
+    top: 0;
+    left: 0;
+  }
+
+  .mfa-reel__half--right {
+    top: 50%;
+    left: 0;
+  }
+
+  /* both sides needed, or the desktop rules below win on specificity and
+     shove the bottom band off-screen horizontally */
+  .mfa-reel__half--left .mfa-reel__stage,
+  .mfa-reel__half--right .mfa-reel__stage {
+    width: 100%;
+    height: 200%;
+    left: 0;
+  }
+
+  .mfa-reel__half--left .mfa-reel__stage {
+    top: 0;
+  }
+
+  .mfa-reel__half--right .mfa-reel__stage {
+    top: -100%;
+  }
+
+  /* a phone-width frame wants a much larger share than 12.4vw to read as the
+     same design — main.js still shrinks whatever would overflow */
+  .mfa-reel__title {
+    font-size: var(--mfa-title-size, clamp(2.4rem, 21vw, 9rem));
+    line-height: 0.84;
+  }
+
+  /* stacked images get too narrow to read at phone widths — show the first */
+  .mfa-reel__img:not(:first-child) {
+    display: none;
+  }
+}
+
+/* ----- reduced motion -----
+   No pin, no wipe: the reel collapses into an honest scrollable list of
+   full-height slides. main.js writes no inline styles in this mode, so these
+   rules are the whole story. */
+.mfa-reel--still .mfa-reel__half--right,
+.mfa-reel--still .mfa-reel__front,
+.mfa-reel--still .mfa-reel__chrome--bottom {
+  display: none;
+}
+
+.mfa-reel--still .mfa-reel__pin {
+  height: auto;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+}
+
+.mfa-reel--still .mfa-reel__half--left {
+  position: static;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  pointer-events: auto;
+}
+
+.mfa-reel--still .mfa-reel__stage {
+  position: static;
+  width: 100%;
+  height: auto;
+}
+
+.mfa-reel--still .mfa-reel__slide {
+  position: relative;
+  inset: auto;
+  height: 100svh;
+}
+
+.mfa-reel--still .mfa-reel__inner {
+  position: absolute;
+  inset: 0;
+}
+
+/* one whole rendering, not two clipped halves — otherwise the still fallback
+   would hand assistive tech a duplicate of every headline and link */
+.mfa-reel--still .mfa-reel__copy-layer--bottom {
+  display: none;
+}
+
+.mfa-reel--still .mfa-reel__copy-layer--top {
+  clip-path: none;
+}
+
+/* the chrome is last in the markup so it paints over the columns; in flow that
+   would put it below every slide, so order pulls it back to the top */
+.mfa-reel--still .mfa-reel__chrome--top {
+  position: sticky;
+  top: 0;
+  order: -1;
+  padding-top: var(--mfa-edge);
+  padding-bottom: var(--mfa-edge);
+  background: var(--mfa-bg);
+}
