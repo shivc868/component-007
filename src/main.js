@@ -124,7 +124,10 @@ const CONTENT = [
 const CONFIG = {
   SLIDE_VH: 1.25, // scroll distance per transition, in viewport heights
   WIPE: 1, // beats the leading column takes to travel the full frame
-  STAGGER: 0.22, // beats the trailing column starts behind the leading one
+  // head start the leading column gets, in beats. Both columns always travel
+  // at the same rate — this only offsets when the second one sets off, so 0
+  // runs them in lockstep and any positive value stays that far ahead throughout.
+  STAGGER: 0,
   HOLD: 0.4, // beats a slide rests before the next wipe begins
   SCRUB: 0.6, // seconds the animation lags the scrollbar — 0 to lock to it
   // Vertical parallax. Both layers drift upward through a transition; the
@@ -137,9 +140,10 @@ const CONFIG = {
   // sections sit on each other and only the drift rate tells them apart.
   // Keep this under PARALLAX_MEDIA or there is no parallax between the two.
   PARALLAX_COPY: 4.5, // % of the frame height the copy block travels
-  // On top of that the content is cut across the middle and the two halves
-  // travel in from opposite directions, meeting exactly as the wipe lands.
-  SPLIT_SHIFT: 11, // % of the frame each half is offset by at the start
+  // On top of that the content is cut down its middle — the same line the
+  // columns split on — and the two halves shear past each other vertically,
+  // closing back into one exactly as the wipe lands.
+  SPLIT_SHIFT: 9, // % of the frame height each half is offset by at the start
   NARROW: 700, // px below which the split turns horizontal (matches style.css)
   // the headline's intended size lives in style.css (font-size on
   // .mfa-reel__title); these are only the guards that shrink it to fit
@@ -212,7 +216,7 @@ const CONFIG = {
       return { copy, layers: [] };
     }
 
-    const layers = ["top", "bottom"].map((edge) => {
+    const layers = ["left", "right"].map((edge) => {
       const layer = el(
         "div",
         `mfa-reel__copy-layer mfa-reel__copy-layer--${edge}`,
@@ -408,13 +412,13 @@ const CONFIG = {
          per-column offset would tear the picture along that line. One drift,
          one direction — the columns only ever differ in what they uncover. */
       const span = WIPE + STAGGER;
-      const drift = (targets, from0, to0) =>
+      const drift = (targets, from0, to0, prop = "yPercent") =>
         tl.fromTo(
           targets,
-          { yPercent: from0 },
+          { [prop]: from0 },
           // immediateRender off on the outgoing pass, or it would stomp the
           // resting state the incoming pass left on the same element
-          { yPercent: to0, duration: span, immediateRender: from0 !== 0 },
+          { [prop]: to0, duration: span, immediateRender: from0 !== 0 },
           at,
         );
 
@@ -440,16 +444,23 @@ const CONFIG = {
         -CONFIG.PARALLAX_COPY,
       );
 
-      /* The split. Each half of the content slides in from its own side and
-         both land on 0 at `cut`, where the two clipped windows reassemble into
-         one whole headline — which is exactly what the front layer is holding,
-         so it can take back over without a seam. The outgoing content runs the
-         same move in reverse and pulls apart as it is covered. */
+      /* The split. The content is cut down its middle and the two halves shear
+         past each other vertically, closing back to 0 at `cut` — where they
+         line up into exactly the whole headline the front layer is holding, so
+         it can take back over without a seam.
+
+         Vertical movement is the point. The cut is vertical, so travelling
+         along it keeps the halves touching the whole way: the line never opens
+         and no glyph is torn across. Moving them across the cut instead is
+         what puts a gap through the type.
+
+         Each half runs with the column it shows through — the left half rises
+         like the left column's wipe, the right half descends like the right's. */
       const { SPLIT_SHIFT } = CONFIG;
       const half = (columns, i) => columns.map((c) => c.layers[i]);
 
-      drift(half(inCols, 0), -SPLIT_SHIFT, 0);
-      drift(half(inCols, 1), SPLIT_SHIFT, 0);
+      drift(half(inCols, 0), SPLIT_SHIFT, 0);
+      drift(half(inCols, 1), -SPLIT_SHIFT, 0);
       drift(half(outCols, 0), 0, -SPLIT_SHIFT);
       drift(half(outCols, 1), 0, SPLIT_SHIFT);
 

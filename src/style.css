@@ -165,18 +165,20 @@
   will-change: transform, opacity;
 }
 
-/* The content is rendered twice and each copy clipped to one half of itself,
-   so the two are complementary: together they are the whole, and neither ever
-   draws what the other does. The clip sits on the same element as the
-   transform on purpose — it travels with its half, which is what lets the two
-   pieces tear apart cleanly and close back into one.
+/* The content is rendered twice and each copy clipped to one half of itself —
+   cut down the middle, on the same line the columns are cut on. The two are
+   complementary: together they are the whole, and neither ever draws what the
+   other does. main.js shears them apart vertically, which is *along* this cut
+   rather than across it, so the line stays closed and no glyph is split open.
 
-   (Putting the cut on a static parent instead looks equivalent at rest but is
-   not: each half then shows a fixed slice of the *frame*, so once they move,
-   content near the cut line satisfies both and gets drawn twice.)
+   Two things here are load-bearing:
 
-   The top half overruns the midline by half a pixel so the seam cannot open on
-   fractional device pixels when the two meet. */
+   - The clip is on the same element as the transform, so it travels with its
+     half. On a static parent instead, each half would show a fixed slice of
+     the *frame*, and content near the cut line would satisfy both halves and
+     get drawn twice.
+   - The left half overruns the midline by half a pixel, so the seam cannot
+     open on fractional device pixels where the two meet. */
 .mfa-reel__copy-layer {
   position: absolute;
   inset: 0;
@@ -190,12 +192,12 @@
   will-change: transform;
 }
 
-.mfa-reel__copy-layer--top {
-  clip-path: inset(0 0 calc(50% - 0.5px) 0);
+.mfa-reel__copy-layer--left {
+  clip-path: inset(0 calc(50% - 0.5px) 0 0);
 }
 
-.mfa-reel__copy-layer--bottom {
-  clip-path: inset(50% 0 0 0);
+.mfa-reel__copy-layer--right {
+  clip-path: inset(0 0 0 50%);
 }
 
 .mfa-reel__kicker,
@@ -410,11 +412,11 @@ a.mfa-reel__chrome-item:focus-visible {
 
 /* one whole rendering, not two clipped halves — otherwise the still fallback
    would hand assistive tech a duplicate of every headline and link */
-.mfa-reel--still .mfa-reel__copy-layer--bottom {
+.mfa-reel--still .mfa-reel__copy-layer--right {
   display: none;
 }
 
-.mfa-reel--still .mfa-reel__copy-layer--top {
+.mfa-reel--still .mfa-reel__copy-layer--left {
   clip-path: none;
 }
 
