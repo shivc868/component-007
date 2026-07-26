@@ -6,10 +6,11 @@
    This file only builds the GSAP timeline.
 
    The timeline is one transition per slide change, laid end to end with no gap
-   between them. That matters: every layer passes through its resting position
-   at the exact instant one transition finishes and the next starts, then keeps
-   going the same way at the same speed. With ease "none" throughout there is
-   no acceleration anywhere, so the joins cannot be seen.
+   between them. That matters for the wipe and the photo: both pass through
+   their resting position at the exact instant one transition finishes and the
+   next starts, then keep going the same way at the same speed. With ease
+   "none" throughout there is no acceleration anywhere, so the joins cannot be
+   seen. The text is the deliberate exception — see TEXT_SPAN.
 
    ScrollTrigger maps scroll progress onto the timeline's progress, one to one.
 --------------------------------------------------------------------------- */
@@ -54,6 +55,11 @@ const CONFIG = {
   PARALLAX_MEDIA: 10, // how far the photo drifts. Keep under --mfa-overscan
   PARALLAX_COPY: 4.5, // and the text drifts less, which is what reads as depth
   SPLIT_SHIFT: 9, // how far the two halves of the text shear past each other
+  // Share of a transition the text takes. The photo and the wipe always take
+  // the whole of it, so anything under 1 lands the headline early and holds it
+  // still, whole and readable, while the picture keeps changing behind it.
+  // Set it to 1 to have the text finish with the wipe again.
+  TEXT_SPAN: 0.8,
   NARROW: 700, // px below which the split turns horizontal (matches style.css)
 };
 
@@ -126,8 +132,9 @@ const WIPE_FROM = { left: 100, right: -100 };
   const both = (slide, key) => COLUMNS.map((side) => slide[side][key]);
 
   /** One slide handing over to the next, always exactly 1 long. Every tween
-   *  starts at 0 and runs the full length, so the columns stay in lockstep and
-   *  there is no position arithmetic anywhere. */
+   *  starts at position 0, so the columns stay in lockstep and there is no
+   *  position arithmetic anywhere; only the text stops short of the full
+   *  length, which is what lands the headline before the wipe finishes. */
   const transition = (from, to, axis) => {
     const tl = gsap.timeline({ defaults: { duration: 1, ease: "none" } });
 
@@ -135,13 +142,13 @@ const WIPE_FROM = { left: 100, right: -100 };
     // at rest and carry on the same way. immediateRender is off on the leaving
     // ones or GSAP would apply their "from" as soon as the tween is built,
     // snapping the slide out of place long before its turn comes round.
-    const arrive = (targets, offset) =>
-      tl.fromTo(targets, { yPercent: offset }, { yPercent: 0 }, 0);
-    const leave = (targets, offset) =>
+    const arrive = (targets, offset, duration = 1) =>
+      tl.fromTo(targets, { yPercent: offset }, { yPercent: 0, duration }, 0);
+    const leave = (targets, offset, duration = 1) =>
       tl.fromTo(
         targets,
         { yPercent: 0 },
-        { yPercent: offset, immediateRender: false },
+        { yPercent: offset, duration, immediateRender: false },
         0,
       );
 
@@ -154,19 +161,23 @@ const WIPE_FROM = { left: 100, right: -100 };
       tl.fromTo(to[side].inner, { [axis]: -edge }, { [axis]: 0 }, 0);
     }
 
-    // the parallax, and the two halves of the text shearing past each other.
-    // Every one of these passes through 0 at the end of the transition and
-    // picks up from 0 in the next, in the same direction — which is what makes
-    // one transition run into the next without a seam.
+    // the photo drift, over the whole transition. It passes through 0 exactly
+    // as the transition ends and picks up from 0 in the next, in the same
+    // direction — which is what makes one run into the next without a seam.
     arrive(both(to, "media"), CONFIG.PARALLAX_MEDIA);
-    arrive(both(to, "copy"), CONFIG.PARALLAX_COPY);
-    arrive(both(to, "leftHalf"), CONFIG.SPLIT_SHIFT);
-    arrive(both(to, "rightHalf"), -CONFIG.SPLIT_SHIFT);
-
     leave(both(from, "media"), -CONFIG.PARALLAX_MEDIA);
-    leave(both(from, "copy"), -CONFIG.PARALLAX_COPY);
-    leave(both(from, "leftHalf"), -CONFIG.SPLIT_SHIFT);
-    leave(both(from, "rightHalf"), CONFIG.SPLIT_SHIFT);
+
+    // the text: the copy block, and the two halves shearing past each other.
+    // Both settle in TEXT_SPAN rather than the full length, so the headline is
+    // whole and still for the rest of the wipe.
+    const t = CONFIG.TEXT_SPAN;
+    arrive(both(to, "copy"), CONFIG.PARALLAX_COPY, t);
+    arrive(both(to, "leftHalf"), CONFIG.SPLIT_SHIFT, t);
+    arrive(both(to, "rightHalf"), -CONFIG.SPLIT_SHIFT, t);
+
+    leave(both(from, "copy"), -CONFIG.PARALLAX_COPY, t);
+    leave(both(from, "leftHalf"), -CONFIG.SPLIT_SHIFT, t);
+    leave(both(from, "rightHalf"), CONFIG.SPLIT_SHIFT, t);
 
     return tl;
   };
