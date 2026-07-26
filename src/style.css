@@ -338,63 +338,16 @@ a.mfa-reel__chrome-item:focus-visible {
 }
 
 /* ----- narrow screens -----
-   Two columns on a phone would leave slivers too thin to read a wipe in, so
-   the split goes horizontal instead: the incoming slide wipes in from the
-   right in the top band and from the left in the bottom one. Same idea,
-   rotated — handled by main.js swapping which axis it animates. */
+   The layout does not change: the frame still splits down the middle into two
+   columns and the wipe still runs up and down them, exactly as on a desktop.
+   Only the type gets smaller and the second photo drops out. */
 @media (max-width: 700px) {
+  /* a phone-width frame wants a much larger share of it for the headline to
+     read as the same design; the caps on the size itself still apply */
   .mfa-reel {
     --mfa-micro: 10px;
-  }
-
-  .mfa-reel__column {
-    width: 100%;
-    height: 50%;
-  }
-
-  .mfa-reel__column--left {
-    top: 0;
-    left: 0;
-  }
-
-  .mfa-reel__column--right {
-    top: 50%;
-    left: 0;
-  }
-
-  /* both sides needed, or the desktop rules below win on specificity and
-     shove the bottom band off-screen horizontally */
-  .mfa-reel__column--left .mfa-reel__stage,
-  .mfa-reel__column--right .mfa-reel__stage {
-    width: 100%;
-    height: 200%;
-    left: 0;
-  }
-
-  .mfa-reel__column--left .mfa-reel__stage {
-    top: 0;
-  }
-
-  .mfa-reel__column--right .mfa-reel__stage {
-    top: -100%;
-  }
-
-  /* a phone-width frame wants a much larger share of it to read as the same
-     design; the caps on the size itself still apply */
-  .mfa-reel {
     --mfa-title-look: 21cqw;
     --mfa-title-leading: 0.84;
-  }
-
-  /* The columns are split across the frame here, not down it, so the text is
-     cut across it too — same line, same idea, rotated. main.js shears the two
-     halves along whichever way the cut runs, so it still never opens. */
-  .mfa-reel__copy-layer:first-child {
-    clip-path: inset(0 0 calc(50% - 0.5px) 0);
-  }
-
-  .mfa-reel__copy-layer:last-child {
-    clip-path: inset(50% 0 0 0);
   }
 
   /* stacked images get too narrow to read at phone widths — show the first */

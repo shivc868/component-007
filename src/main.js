@@ -1,20 +1,3 @@
-/* ---------------------------------------------------------------------------
-   REEL — split-column wipe showreel. Mounts on .mfa-reel.
-
-   The slides are written once each in the <template> in index.html. Their
-   looks, their sizing and the reduced-motion fallback are all in style.css.
-   This file only builds the GSAP timeline.
-
-   The timeline is one transition per slide change, laid end to end with no gap
-   between them. That matters for the wipe and the photo: both pass through
-   their resting position at the exact instant one transition finishes and the
-   next starts, then keep going the same way at the same speed. With ease
-   "none" throughout there is no acceleration anywhere, so the joins cannot be
-   seen. The text is the deliberate exception — see TEXT_SPAN.
-
-   ScrollTrigger maps scroll progress onto the timeline's progress, one to one.
---------------------------------------------------------------------------- */
-
 import "./style.css";
 import "./demo.css"; // showcase page styles only — do NOT copy into your project
 import "lenis/dist/lenis.css";
@@ -22,17 +5,7 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import Lenis from "lenis";
 
-// registering twice is harmless — safe even if the host site registers too
 gsap.registerPlugin(ScrollTrigger);
-
-/* ---------------------------------------------------------------------------
-   Smooth scrolling (optional)
-
-   - Set SMOOTH_SCROLL to false if the host site manages its own scrolling.
-   - If the site already runs Lenis (exposed as window.lenis, the common
-     convention), that instance is reused — two Lenis instances would fight
-     over wheel events and break scrolling.
---------------------------------------------------------------------------- */
 
 const SMOOTH_SCROLL = true;
 
@@ -44,200 +17,162 @@ if (SMOOTH_SCROLL && !window.lenis) {
   gsap.ticker.lagSmoothing(0);
 }
 
-/* ---------------------------------------------------------------------------
-   Config. Content is in index.html, sizing and looks are in style.css.
-   Distances are % of the frame; the wipe itself always travels a full 100%.
---------------------------------------------------------------------------- */
-
 const CONFIG = {
   SCROLL_PER_SLIDE: 1, // viewport heights of scroll each transition takes
   SCRUB: 0.6, // seconds the animation lags the scrollbar — 0 to lock to it
   PARALLAX_MEDIA: 10, // how far the photo drifts. Keep under --mfa-overscan
   PARALLAX_COPY: 4.5, // and the text drifts less, which is what reads as depth
-  SPLIT_SHIFT: 9, // how far the two halves of the text shear past each other
-  // Share of a transition the text takes, centred in it. The photo and the
-  // wipe always take the whole thing, so anything under 1 settles the headline
-  // before the wipe finishes and holds it still, whole and readable, while the
-  // picture keeps changing behind it. Lower it for a longer hold; set it to 1
-  // to have the text finish with the wipe again.
-  TEXT_SPAN: 0.8,
-  NARROW: 700, // px below which the split turns horizontal (matches style.css)
+  SPLIT_SHIFT: 9, // how far the two halves of the text slide past each other
+  TEXT_SPAN: 0.8, // share of a change the text takes; 1 finishes with the wipe
 };
 
-const COLUMNS = ["left", "right"];
-
-// each column is uncovered from its own edge: the left rises, the right descends
-const WIPE_FROM = { left: 100, right: -100 };
-
 (function mfaReel() {
-  const root = document.querySelector(".mfa-reel");
-  if (!root) return;
+  const reel = document.querySelector(".mfa-reel");
+  if (!reel) return;
 
-  const pin = root.querySelector("[data-mfa-pin]");
-  const template = root.querySelector("[data-mfa-slides]");
-  const stages = {
-    left: root.querySelector('[data-mfa-stage="left"]'),
-    right: root.querySelector('[data-mfa-stage="right"]'),
-  };
-  if (!pin || !template || !stages.left || !stages.right) return;
+  const pin = reel.querySelector("[data-mfa-pin]");
+  const template = reel.querySelector("[data-mfa-slides]");
+  const leftStage = reel.querySelector('[data-mfa-stage="left"]');
+  const rightStage = reel.querySelector('[data-mfa-stage="right"]');
+  if (!pin || !template || !leftStage || !rightStage) return;
 
-  /* The one piece of DOM work here, and it is duplication only.
+  // Both columns need the slides, because each clips them differently, and
+  // each slide needs its text twice, because the halves slide past each other.
+  // That is four copies of every headline, so they are cloned rather than
+  // written out. The twin is a pixel duplicate — inert keeps screen readers
+  // and the tab key from meeting the same text twice.
+  for (const copy of template.content.querySelectorAll(".mfa-reel__copy")) {
+    const twin = copy.firstElementChild.cloneNode(true);
+    twin.inert = true;
+    copy.append(twin);
+  }
+  leftStage.append(template.content.cloneNode(true));
+  rightStage.append(template.content.cloneNode(true));
 
-     The effect needs the same slide in both columns, because each clips it
-     differently, and each slide's text twice, because the two halves shear
-     past each other. Written by hand that would be four copies of every
-     headline to keep in sync, so they are stamped out of the template. */
-  for (const side of COLUMNS) {
-    const set = template.content.cloneNode(true);
+  function partsOf(stage, index) {
+    const slide = stage.children[index];
+    const text = slide.querySelector(".mfa-reel__copy");
 
-    for (const copy of set.querySelectorAll(".mfa-reel__copy")) {
-      const twin = copy.firstElementChild.cloneNode(true);
-      // a pixel duplicate of the half above it — say so, and keep it off the
-      // tab ring, so the text is announced and reachable exactly once
-      twin.setAttribute("aria-hidden", "true");
-      for (const link of twin.querySelectorAll("a")) link.tabIndex = -1;
-      copy.append(twin);
-    }
-
-    stages[side].append(set);
+    return {
+      mask: slide, // slides in from off-frame and uncovers the slide
+      inner: slide.firstElementChild, // slides back, so the content holds still
+      photo: slide.querySelector(".mfa-reel__media-inner"),
+      text: text,
+      textLeft: text.firstElementChild,
+      textRight: text.lastElementChild,
+    };
   }
 
-  /** Everything a transition needs to move, per slide, in both columns. The
-   *  two clipped halves are simply the first and last child of the copy —
-   *  style.css cuts them by position, so no marker classes are needed. They
-   *  are start/end rather than left/right because the cut turns on its side on
-   *  narrow screens: left and right there become top and bottom. */
-  const slides = [...stages.left.children].map((_, i) =>
-    Object.fromEntries(
-      COLUMNS.map((side) => {
-        const slide = stages[side].children[i];
-        const copy = slide.querySelector(".mfa-reel__copy");
-        return [
-          side,
-          {
-            slide, // the mask that slides in
-            inner: slide.firstElementChild, // counter-moves, so content holds still
-            media: slide.querySelector(".mfa-reel__media-inner"),
-            copy,
-            startHalf: copy.firstElementChild,
-            endHalf: copy.lastElementChild,
-          },
-        ];
-      }),
-    ),
-  );
-  if (slides.length < 2) return; // one slide: nothing to transition to
+  const slides = [];
+  for (let i = 0; i < leftStage.children.length; i++) {
+    slides.push({
+      left: partsOf(leftStage, i),
+      right: partsOf(rightStage, i),
+    });
+  }
+  if (slides.length < 2) return; // one slide: nothing to change into
 
-  /** The same element from both columns, so one tween moves them as one. Both
-   *  columns always get identical values: the outgoing photo is still on show
-   *  either side of the split while the wipe runs, so a per-column offset
-   *  would tear the picture along that line. */
-  const both = (slide, key) => COLUMNS.map((side) => slide[side][key]);
+  // The same part from both columns. They always move by the same amount: the
+  // outgoing photo is still on show either side of the split while the wipe
+  // runs, so moving one column differently would tear it along that line.
+  function inBothColumns(slide, partName) {
+    return [slide.left[partName], slide.right[partName]];
+  }
 
-  const transition = (from, to, axis) => {
-    const tl = gsap.timeline({ defaults: { duration: 1, ease: "none" } });
+  function buildChange(current, next) {
+    const change = gsap.timeline({ defaults: { ease: "none" } });
 
-    // arriving layers come in offset and settle to rest; leaving layers start
-    // at rest and carry on the same way. immediateRender is off on the leaving
-    // ones or GSAP would apply their "from" as soon as the tween is built,
-    // snapping the slide out of place long before its turn comes round.
-    const arrive = (targets, offset, o = {}) => {
-      const { prop = "yPercent", duration = 1, at = 0 } = o;
-      return tl.fromTo(
-        targets,
-        { [prop]: offset },
-        { [prop]: 0, duration },
-        at,
+    // Moves elements up or down, from one offset to another, where `length` is
+    // how much of the change it takes up (1 being all of it).
+    //
+    // Centred, so a change looks the same scrolled up or down — scrolling back
+    // plays it in reverse, and anything weighted towards one end would read
+    // differently in each direction.
+    //
+    // Elements starting at rest (start is 0) are the ones leaving. GSAP would
+    // normally jump an element to its starting value the moment this line
+    // runs, which for those would yank the slide out of place long before its
+    // turn, so immediateRender switches that off.
+    function move(elements, start, end, length) {
+      change.fromTo(
+        elements,
+        { yPercent: start },
+        { yPercent: end, duration: length, immediateRender: start !== 0 },
+        (1 - length) / 2,
       );
-    };
-    const leave = (targets, offset, o = {}) => {
-      const { prop = "yPercent", duration = 1, at = 0 } = o;
-      return tl.fromTo(
-        targets,
-        { [prop]: 0 },
-        { [prop]: offset, duration, immediateRender: false },
-        at,
-      );
-    };
-
-    // the wipe: the mask slides in from off-frame while the content inside
-    // counter-moves by the same amount, so the new slide is uncovered in place
-    // rather than travelling
-    for (const side of COLUMNS) {
-      const edge = WIPE_FROM[side];
-      tl.fromTo(to[side].slide, { [axis]: edge }, { [axis]: 0 }, 0);
-      tl.fromTo(to[side].inner, { [axis]: -edge }, { [axis]: 0 }, 0);
     }
 
-    // the photo drift, over the whole transition. It passes through 0 exactly
-    // as the transition ends and picks up from 0 in the next, in the same
-    // direction — which is what makes one run into the next without a seam.
-    // Always vertical: --mfa-overscan in style.css only adds headroom there.
-    arrive(both(to, "media"), CONFIG.PARALLAX_MEDIA);
-    leave(both(from, "media"), -CONFIG.PARALLAX_MEDIA);
+    // The wipe. The mask slides in from off-frame while the content inside
+    // slides back by the same amount, so the new slide is uncovered where it
+    // already is instead of travelling into place. The left column is
+    // uncovered from below, the right one from above.
+    move([next.left.mask], 100, 0, 1);
+    move([next.left.inner], -100, 0, 1);
+    move([next.right.mask], -100, 0, 1);
+    move([next.right.inner], 100, 0, 1);
 
+    // The photo, drifting the whole way. It passes through 0 exactly as the
+    // change ends and picks up from 0 in the next, in the same direction —
+    // which is what runs one change into the next without a seam.
+    move(inBothColumns(next, "photo"), CONFIG.PARALLAX_MEDIA, 0, 1);
+    move(inBothColumns(current, "photo"), 0, -CONFIG.PARALLAX_MEDIA, 1);
+
+    // The text block, drifting less than the photo — that difference is what
+    // reads as depth. It takes less than the whole change, so the headline
+    // settles before the wipe does and then holds still.
     const span = CONFIG.TEXT_SPAN;
-    const text = { duration: span, at: (1 - span) / 2 };
-    const halves = { ...text, prop: axis };
+    move(inBothColumns(next, "text"), CONFIG.PARALLAX_COPY, 0, span);
+    move(inBothColumns(current, "text"), 0, -CONFIG.PARALLAX_COPY, span);
 
-    arrive(both(to, "copy"), CONFIG.PARALLAX_COPY, text);
-    arrive(both(to, "startHalf"), CONFIG.SPLIT_SHIFT, halves);
-    arrive(both(to, "endHalf"), -CONFIG.SPLIT_SHIFT, halves);
+    // The two halves of the text, sliding past each other and closing back
+    // into one word. The text is cut down the middle, and moving along that
+    // cut rather than across it is what keeps it from opening.
+    move(inBothColumns(next, "textLeft"), CONFIG.SPLIT_SHIFT, 0, span);
+    move(inBothColumns(next, "textRight"), -CONFIG.SPLIT_SHIFT, 0, span);
+    move(inBothColumns(current, "textLeft"), 0, -CONFIG.SPLIT_SHIFT, span);
+    move(inBothColumns(current, "textRight"), 0, CONFIG.SPLIT_SHIFT, span);
 
-    leave(both(from, "copy"), -CONFIG.PARALLAX_COPY, text);
-    leave(both(from, "startHalf"), -CONFIG.SPLIT_SHIFT, halves);
-    leave(both(from, "endHalf"), CONFIG.SPLIT_SHIFT, halves);
+    return change;
+  }
 
-    return tl;
-  };
-
+  // No match when the visitor has asked for reduced motion, so nothing is
+  // built and the reel stays the plain list of slides that style.css lays out.
   const mm = gsap.matchMedia();
 
-  // No match under prefers-reduced-motion, so nothing below is built and the
-  // reel stays the plain list of slides that style.css lays out.
-  mm.add(
-    {
-      wide: `(prefers-reduced-motion: no-preference) and (min-width: ${CONFIG.NARROW + 1}px)`,
-      narrow: `(prefers-reduced-motion: no-preference) and (max-width: ${CONFIG.NARROW}px)`,
-    },
-    (ctx) => {
-      // narrow screens split across instead of down, so the same wipe rotates
-      // onto the x axis (style.css restacks the columns to match)
-      const axis = ctx.conditions.narrow ? "xPercent" : "yPercent";
+  mm.add("(prefers-reduced-motion: no-preference)", () => {
+    const reelTimeline = gsap.timeline({ paused: true });
+    for (let i = 0; i < slides.length - 1; i++) {
+      reelTimeline.add(buildChange(slides[i], slides[i + 1]));
+    }
 
-      const timeline = gsap.timeline({ paused: true });
-      slides.forEach((slide, i) => {
-        const next = slides[i + 1];
-        if (next) timeline.add(transition(slide, next, axis));
-      });
+    const scroll = ScrollTrigger.create({
+      trigger: reel,
+      start: "top top",
+      end: () =>
+        "+=" +
+        window.innerHeight * CONFIG.SCROLL_PER_SLIDE * (slides.length - 1),
+      pin: pin,
+      pinSpacing: true,
+      anticipatePin: 1,
+      invalidateOnRefresh: true,
+      animation: reelTimeline, // how far you have scrolled = how far it has played
+      scrub: CONFIG.SCRUB, // …with this much catch-up lag
+    });
 
-      const scroll = ScrollTrigger.create({
-        trigger: root,
-        start: "top top",
-        end: () =>
-          "+=" +
-          window.innerHeight * CONFIG.SCROLL_PER_SLIDE * (slides.length - 1),
-        pin,
-        pinSpacing: true,
-        anticipatePin: 1,
-        invalidateOnRefresh: true,
-        animation: timeline, // scroll progress drives timeline progress
-        scrub: CONFIG.SCRUB, // …with this much catch-up lag
-      });
-
-      return () => {
-        scroll.kill();
-        timeline.kill();
-      };
-    },
-  );
+    return () => {
+      scroll.kill();
+      reelTimeline.kill();
+    };
+  });
 
   // our own height never changes, but the host page's might once photos and
   // fonts have settled
-  const onLoad = () => ScrollTrigger.refresh();
+  function onLoad() {
+    ScrollTrigger.refresh();
+  }
   window.addEventListener("load", onLoad, { once: true });
 
-  root.mfaDestroy = () => {
+  reel.mfaDestroy = function () {
     window.removeEventListener("load", onLoad);
     mm.revert();
   };

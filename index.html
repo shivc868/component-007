@@ -40,15 +40,12 @@
     <section class="mfa-reel" aria-label="Selected work">
       <div class="mfa-reel__pin" data-mfa-pin>
         <!-- the left column carries the readable copy of the text; the right
-             one is a pixel duplicate of it, so it is hidden from assistive
-             tech here rather than in JS -->
+             one is a pixel duplicate, so `inert` takes it out of both the
+             screen reader and the tab order in one attribute -->
         <div class="mfa-reel__column mfa-reel__column--left">
           <div class="mfa-reel__stage" data-mfa-stage="left"></div>
         </div>
-        <div
-          class="mfa-reel__column mfa-reel__column--right"
-          aria-hidden="true"
-        >
+        <div class="mfa-reel__column mfa-reel__column--right" inert>
           <div class="mfa-reel__stage" data-mfa-stage="right"></div>
         </div>
 
