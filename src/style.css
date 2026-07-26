@@ -386,6 +386,17 @@ a.mfa-reel__chrome-item:focus-visible {
     --mfa-title-leading: 0.84;
   }
 
+  /* The columns are split across the frame here, not down it, so the text is
+     cut across it too — same line, same idea, rotated. main.js shears the two
+     halves along whichever way the cut runs, so it still never opens. */
+  .mfa-reel__copy-layer:first-child {
+    clip-path: inset(0 0 calc(50% - 0.5px) 0);
+  }
+
+  .mfa-reel__copy-layer:last-child {
+    clip-path: inset(50% 0 0 0);
+  }
+
   /* stacked images get too narrow to read at phone widths — show the first */
   .mfa-reel__img:not(:first-child) {
     display: none;

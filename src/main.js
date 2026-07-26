@@ -55,10 +55,11 @@ const CONFIG = {
   PARALLAX_MEDIA: 10, // how far the photo drifts. Keep under --mfa-overscan
   PARALLAX_COPY: 4.5, // and the text drifts less, which is what reads as depth
   SPLIT_SHIFT: 9, // how far the two halves of the text shear past each other
-  // Share of a transition the text takes. The photo and the wipe always take
-  // the whole of it, so anything under 1 lands the headline early and holds it
-  // still, whole and readable, while the picture keeps changing behind it.
-  // Set it to 1 to have the text finish with the wipe again.
+  // Share of a transition the text takes, centred in it. The photo and the
+  // wipe always take the whole thing, so anything under 1 settles the headline
+  // before the wipe finishes and holds it still, whole and readable, while the
+  // picture keeps changing behind it. Lower it for a longer hold; set it to 1
+  // to have the text finish with the wipe again.
   TEXT_SPAN: 0.8,
   NARROW: 700, // px below which the split turns horizontal (matches style.css)
 };
@@ -103,7 +104,9 @@ const WIPE_FROM = { left: 100, right: -100 };
 
   /** Everything a transition needs to move, per slide, in both columns. The
    *  two clipped halves are simply the first and last child of the copy —
-   *  style.css cuts them by position, so no marker classes are needed. */
+   *  style.css cuts them by position, so no marker classes are needed. They
+   *  are start/end rather than left/right because the cut turns on its side on
+   *  narrow screens: left and right there become top and bottom. */
   const slides = [...stages.left.children].map((_, i) =>
     Object.fromEntries(
       COLUMNS.map((side) => {
@@ -116,8 +119,8 @@ const WIPE_FROM = { left: 100, right: -100 };
             inner: slide.firstElementChild, // counter-moves, so content holds still
             media: slide.querySelector(".mfa-reel__media-inner"),
             copy,
-            leftHalf: copy.firstElementChild,
-            rightHalf: copy.lastElementChild,
+            startHalf: copy.firstElementChild,
+            endHalf: copy.lastElementChild,
           },
         ];
       }),
@@ -131,10 +134,6 @@ const WIPE_FROM = { left: 100, right: -100 };
    *  would tear the picture along that line. */
   const both = (slide, key) => COLUMNS.map((side) => slide[side][key]);
 
-  /** One slide handing over to the next, always exactly 1 long. Every tween
-   *  starts at position 0, so the columns stay in lockstep and there is no
-   *  position arithmetic anywhere; only the text stops short of the full
-   *  length, which is what lands the headline before the wipe finishes. */
   const transition = (from, to, axis) => {
     const tl = gsap.timeline({ defaults: { duration: 1, ease: "none" } });
 
@@ -142,15 +141,24 @@ const WIPE_FROM = { left: 100, right: -100 };
     // at rest and carry on the same way. immediateRender is off on the leaving
     // ones or GSAP would apply their "from" as soon as the tween is built,
     // snapping the slide out of place long before its turn comes round.
-    const arrive = (targets, offset, duration = 1) =>
-      tl.fromTo(targets, { yPercent: offset }, { yPercent: 0, duration }, 0);
-    const leave = (targets, offset, duration = 1) =>
-      tl.fromTo(
+    const arrive = (targets, offset, o = {}) => {
+      const { prop = "yPercent", duration = 1, at = 0 } = o;
+      return tl.fromTo(
         targets,
-        { yPercent: 0 },
-        { yPercent: offset, duration, immediateRender: false },
-        0,
+        { [prop]: offset },
+        { [prop]: 0, duration },
+        at,
       );
+    };
+    const leave = (targets, offset, o = {}) => {
+      const { prop = "yPercent", duration = 1, at = 0 } = o;
+      return tl.fromTo(
+        targets,
+        { [prop]: 0 },
+        { [prop]: offset, duration, immediateRender: false },
+        at,
+      );
+    };
 
     // the wipe: the mask slides in from off-frame while the content inside
     // counter-moves by the same amount, so the new slide is uncovered in place
@@ -164,20 +172,21 @@ const WIPE_FROM = { left: 100, right: -100 };
     // the photo drift, over the whole transition. It passes through 0 exactly
     // as the transition ends and picks up from 0 in the next, in the same
     // direction — which is what makes one run into the next without a seam.
+    // Always vertical: --mfa-overscan in style.css only adds headroom there.
     arrive(both(to, "media"), CONFIG.PARALLAX_MEDIA);
     leave(both(from, "media"), -CONFIG.PARALLAX_MEDIA);
 
-    // the text: the copy block, and the two halves shearing past each other.
-    // Both settle in TEXT_SPAN rather than the full length, so the headline is
-    // whole and still for the rest of the wipe.
-    const t = CONFIG.TEXT_SPAN;
-    arrive(both(to, "copy"), CONFIG.PARALLAX_COPY, t);
-    arrive(both(to, "leftHalf"), CONFIG.SPLIT_SHIFT, t);
-    arrive(both(to, "rightHalf"), -CONFIG.SPLIT_SHIFT, t);
+    const span = CONFIG.TEXT_SPAN;
+    const text = { duration: span, at: (1 - span) / 2 };
+    const halves = { ...text, prop: axis };
 
-    leave(both(from, "copy"), -CONFIG.PARALLAX_COPY, t);
-    leave(both(from, "leftHalf"), -CONFIG.SPLIT_SHIFT, t);
-    leave(both(from, "rightHalf"), CONFIG.SPLIT_SHIFT, t);
+    arrive(both(to, "copy"), CONFIG.PARALLAX_COPY, text);
+    arrive(both(to, "startHalf"), CONFIG.SPLIT_SHIFT, halves);
+    arrive(both(to, "endHalf"), -CONFIG.SPLIT_SHIFT, halves);
+
+    leave(both(from, "copy"), -CONFIG.PARALLAX_COPY, text);
+    leave(both(from, "startHalf"), -CONFIG.SPLIT_SHIFT, halves);
+    leave(both(from, "endHalf"), CONFIG.SPLIT_SHIFT, halves);
 
     return tl;
   };
