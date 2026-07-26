@@ -52,7 +52,7 @@
    it always spans the full frame regardless of how the host sizes us — the
    right one is pulled back by its own width so both stages land on the same
    pixels. That is what lets a headline read across the split. */
-.mfa-reel__half {
+.mfa-reel__column {
   position: absolute;
   top: 0;
   width: 50%;
@@ -61,11 +61,11 @@
   pointer-events: none; /* the front layer takes all input */
 }
 
-.mfa-reel__half--left {
+.mfa-reel__column--left {
   left: 0;
 }
 
-.mfa-reel__half--right {
+.mfa-reel__column--right {
   left: 50%;
 }
 
@@ -76,11 +76,11 @@
   height: 100%;
 }
 
-.mfa-reel__half--left .mfa-reel__stage {
+.mfa-reel__column--left .mfa-reel__stage {
   left: 0;
 }
 
-.mfa-reel__half--right .mfa-reel__stage {
+.mfa-reel__column--right .mfa-reel__stage {
   left: -100%;
 }
 
@@ -323,35 +323,35 @@ a.mfa-reel__chrome-item:focus-visible {
     --mfa-micro: 10px;
   }
 
-  .mfa-reel__half {
+  .mfa-reel__column {
     width: 100%;
     height: 50%;
   }
 
-  .mfa-reel__half--left {
+  .mfa-reel__column--left {
     top: 0;
     left: 0;
   }
 
-  .mfa-reel__half--right {
+  .mfa-reel__column--right {
     top: 50%;
     left: 0;
   }
 
   /* both sides needed, or the desktop rules below win on specificity and
      shove the bottom band off-screen horizontally */
-  .mfa-reel__half--left .mfa-reel__stage,
-  .mfa-reel__half--right .mfa-reel__stage {
+  .mfa-reel__column--left .mfa-reel__stage,
+  .mfa-reel__column--right .mfa-reel__stage {
     width: 100%;
     height: 200%;
     left: 0;
   }
 
-  .mfa-reel__half--left .mfa-reel__stage {
+  .mfa-reel__column--left .mfa-reel__stage {
     top: 0;
   }
 
-  .mfa-reel__half--right .mfa-reel__stage {
+  .mfa-reel__column--right .mfa-reel__stage {
     top: -100%;
   }
 
@@ -372,7 +372,7 @@ a.mfa-reel__chrome-item:focus-visible {
    No pin, no wipe: the reel collapses into an honest scrollable list of
    full-height slides. main.js writes no inline styles in this mode, so these
    rules are the whole story. */
-.mfa-reel--still .mfa-reel__half--right,
+.mfa-reel--still .mfa-reel__column--right,
 .mfa-reel--still .mfa-reel__front,
 .mfa-reel--still .mfa-reel__chrome--bottom {
   display: none;
@@ -385,7 +385,7 @@ a.mfa-reel__chrome-item:focus-visible {
   flex-direction: column;
 }
 
-.mfa-reel--still .mfa-reel__half--left {
+.mfa-reel--still .mfa-reel__column--left {
   position: static;
   width: 100%;
   height: auto;

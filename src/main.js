@@ -1,11 +1,28 @@
 /* ---------------------------------------------------------------------------
-   REEL — split-column wipe showreel.
+   REEL — split-column wipe showreel. Mounts on .mfa-reel (see index.html).
 
-   Mounts on .mfa-reel (see index.html). Each of the two columns gets its own
-   full-width copy of every slide and only clips it, so a headline reads
-   straight across the split while the halves sit at different points in the
-   wipe. The current slide's copy is mirrored into a front layer above both
-   columns; that is the one that holds through the overlap and hard-cuts.
+   Structure, top to bottom:
+
+     .mfa-reel__pin              pinned frame; nothing inside it scrolls
+       .mfa-reel__column--left   50%-wide window, clips everything inside it
+         .mfa-reel__stage        full-frame wide, so content ignores the column
+           .mfa-reel__slide      xN — the mask that slides in over the last one
+             .mfa-reel__inner    counter-moves, so content is uncovered in place
+               __media           the photo, drawn oversized for the drift
+               __veil            scrim, so the type stays readable
+               __copy            the text, cut down the middle into two halves
+       .mfa-reel__column--right  all of the above again
+       .mfa-reel__front          current slide's text, whole and unclipped
+       .mfa-reel__chrome         site nav and footer, never clipped
+
+   Each column holds its own full-width copy of every slide and only clips it,
+   so a headline reads straight across the split. The front layer is the
+   resting state and the only text that is interactive or read by a screen
+   reader; during a transition it stands down and the column copies take over,
+   so the wipe governs the type exactly as it governs the photos.
+
+   Scroll progress drives the timeline's progress, one to one. The timeline is
+   a plain alternation of rest and transition, built in buildTimeline() below.
 --------------------------------------------------------------------------- */
 
 import "./style.css";
@@ -48,7 +65,7 @@ if (SMOOTH_SCROLL && !window.lenis) {
            so the break is exactly where you put it
    status  small line under the headline
    cta     optional link; omit both cta and href for a slide with no link
-   images  one or two per slide; two split the frame evenly
+   images  one or two per slide; two split the frame between them
 --------------------------------------------------------------------------- */
 
 const CONTENT = [
@@ -118,39 +135,35 @@ const CONTENT = [
 
 /* ---------------------------------------------------------------------------
    Config — every magic number, one knob each.
-   Timings are in abstract beats; the scroll distance below scales them all.
+
+   Timings are in transitions: one transition is 1, so REST: 0.4 means a slide
+   sits still for four tenths of the time it takes to change.
 --------------------------------------------------------------------------- */
 
 const CONFIG = {
-  SLIDE_VH: 1.25, // scroll distance per transition, in viewport heights
-  WIPE: 1, // beats the leading column takes to travel the full frame
-  // head start the leading column gets, in beats. Both columns always travel
-  // at the same rate — this only offsets when the second one sets off, so 0
-  // runs them in lockstep and any positive value stays that far ahead throughout.
-  STAGGER: 0,
-  HOLD: 0.4, // beats a slide rests before the next wipe begins
+  SCROLL_PER_SLIDE: 1.25, // viewport heights of scroll each transition takes
+  REST: 0.4, // how long a slide sits still between transitions
   SCRUB: 0.6, // seconds the animation lags the scrollbar — 0 to lock to it
-  // Vertical parallax. Both layers drift upward through a transition; the
-  // photo travels further than the headline, and that difference is the
-  // effect. Percentages of each layer's own height — keep MEDIA under the
-  // --mfa-overscan margin in style.css or the photo's edge comes into frame.
-  PARALLAX_MEDIA: 8, // incoming photo enters this far below its resting place
-  // The copy travels as one block, exactly like the photo does — kicker,
-  // headline and labels stay locked together at a fixed size, so consecutive
-  // sections sit on each other and only the drift rate tells them apart.
-  // Keep this under PARALLAX_MEDIA or there is no parallax between the two.
-  PARALLAX_COPY: 4.5, // % of the frame height the copy block travels
-  // On top of that the content is cut down its middle — the same line the
-  // columns split on — and the two halves shear past each other vertically,
-  // closing back into one exactly as the wipe lands.
-  SPLIT_SHIFT: 9, // % of the frame height each half is offset by at the start
+
+  // Parallax, in % of the frame. The photo travels furthest and the text
+  // follows slower; that difference is what reads as depth. Keep the photo
+  // under --mfa-overscan in style.css or its own edge comes into frame.
+  PARALLAX_MEDIA: 10,
+  PARALLAX_COPY: 4.5,
+
+  // The text is cut down its middle — the same line the columns split on — and
+  // the two halves shear past each other by this much before closing up.
+  SPLIT_SHIFT: 9,
+
   NARROW: 700, // px below which the split turns horizontal (matches style.css)
-  // the headline's intended size lives in style.css (font-size on
-  // .mfa-reel__title); these are only the guards that shrink it to fit
-  TITLE_FILL: 0.96, // widest line may not exceed this share of the frame width
-  TITLE_MAX_H: 0.62, // whole headline block, as a share of the frame height
+
+  // Headline fit. The size itself lives in style.css; these only cap it.
+  TITLE_FILL: 0.96, // longest line may not exceed this share of the width
+  TITLE_MAX_H: 0.62, // tallest headline block, as a share of the height
   TITLE_MIN: 20, // px floor
 };
+
+const COLUMNS = ["left", "right"];
 
 (function mfaReel() {
   const root = document.querySelector(".mfa-reel");
@@ -165,7 +178,7 @@ const CONFIG = {
   if (!pin || !front || !stages.left || !stages.right) return;
   if (CONTENT.length === 0) return;
 
-  const SIDES = ["left", "right"];
+  /* ---- building the DOM ------------------------------------------------- */
 
   const el = (tag, cls, parent) => {
     const node = document.createElement(tag);
@@ -174,7 +187,7 @@ const CONFIG = {
     return node;
   };
 
-  /** One rendering of the content: kicker, headline, status, cta. */
+  /** One rendering of a slide's text: kicker, headline, status, cta. */
   const fillLayer = (layer, item) => {
     if (item.kicker?.length) {
       const kicker = el("p", "mfa-reel__kicker", layer);
@@ -199,24 +212,18 @@ const CONFIG = {
     }
   };
 
-  /* The copy block.
-
-     In the columns the content is rendered twice, each rendering clipped to
-     one half of itself (see style.css). The two are complementary, so they
-     tear apart in opposite directions during the wipe and close back into a
-     single whole headline as it lands.
-
-     The front layer needs no split — it is the resting state — so it gets a
-     single unclipped layer. That is also the copy that stays interactive. */
+  /** In the columns the text is rendered twice, each copy clipped to one half
+   *  of itself (see style.css) so the two can shear apart and close back into
+   *  one. The front layer is the resting state and needs no split. */
   const buildCopy = (item, split) => {
     const copy = el("div", "mfa-reel__copy");
 
     if (!split) {
       fillLayer(el("div", "mfa-reel__copy-layer", copy), item);
-      return { copy, layers: [] };
+      return { copy };
     }
 
-    const layers = ["left", "right"].map((edge) => {
+    const cut = (edge) => {
       const layer = el(
         "div",
         `mfa-reel__copy-layer mfa-reel__copy-layer--${edge}`,
@@ -224,9 +231,9 @@ const CONFIG = {
       );
       fillLayer(layer, item);
       return layer;
-    });
+    };
 
-    return { copy, layers };
+    return { copy, leftHalf: cut("left"), rightHalf: cut("right") };
   };
 
   const buildSlide = (item, i) => {
@@ -248,21 +255,21 @@ const CONFIG = {
     }
 
     el("div", "mfa-reel__veil", inner);
-    const { copy, layers } = buildCopy(item, true);
+    const { copy, leftHalf, rightHalf } = buildCopy(item, true);
     inner.appendChild(copy);
 
-    return { slide, inner, mediaInner, copy, layers };
+    return { slide, inner, mediaInner, copy, leftHalf, rightHalf };
   };
 
-  // one set of slides per column, plus a front copy per slide
-  const parts = CONTENT.map((item, i) => {
+  // one set of slides per column, plus one whole copy in the front layer
+  const slides = CONTENT.map((item, i) => {
     const built = {};
-    for (const side of SIDES) {
+
+    for (const side of COLUMNS) {
       built[side] = buildSlide(item, i);
       stages[side].appendChild(built[side].slide);
     }
 
-    // front layer: a bare copy with no media behind it, and no split
     const shell = el("article", "mfa-reel__slide", front);
     shell.style.setProperty("--mfa-accent", item.accent);
     shell.appendChild(buildCopy(item, false).copy);
@@ -271,211 +278,191 @@ const CONFIG = {
     return built;
   });
 
+  /** The same element from both columns, so a tween can move them as one. */
+  const both = (slide, key) => COLUMNS.map((side) => slide[side][key]);
+
+  /* ---- accessibility ---------------------------------------------------- */
+
   // the columns are a visual duplicate of the front layer — keep them out of
   // the a11y tree and out of the tab order
-  const halves = SIDES.map((side) => root.querySelector(`[data-mfa-half="${side}"]`));
-  const setDuplicate = (half, on) => {
-    if (!half) return;
-    if (on) half.setAttribute("aria-hidden", "true");
-    else half.removeAttribute("aria-hidden");
-    for (const link of half.querySelectorAll("a")) {
+  const columnEls = COLUMNS.map((side) =>
+    root.querySelector(`[data-mfa-column="${side}"]`),
+  );
+
+  const setDuplicate = (column, on) => {
+    if (!column) return;
+    if (on) column.setAttribute("aria-hidden", "true");
+    else column.removeAttribute("aria-hidden");
+    for (const link of column.querySelectorAll("a")) {
       if (on) link.setAttribute("tabindex", "-1");
       else link.removeAttribute("tabindex");
     }
   };
-  halves.forEach((half) => setDuplicate(half, true));
 
-  /* Headline sizing.
-     One size for the whole component, not one per slide: the sections stack on
-     each other during a transition, so a slide-by-slide fit would have them
-     changing size as they hand over. Every slide is measured, the tightest
-     answer wins, and all of them get it — so they overlap at exactly the same
-     size whatever their content.
+  columnEls.forEach((column) => setDuplicate(column, true));
 
-     Lines are authored and never wrap, so the size style.css asks for will
-     overflow the frame the moment a buyer writes a long word; the measured
-     terms only ever pull that size down. The left column is the probe: it
-     always spans the whole frame, and its copy is only ever hidden with
-     visibility, which leaves layout intact. */
-  const REF = 100;
-  const VAR = "--mfa-title-size";
+  /* ---- headline sizing --------------------------------------------------
 
-  const fitTitles = () => {
-    const nodes = parts.flatMap((p) => [p.left.slide, p.right.slide, p.front]);
+     One size for the whole reel, written once on the root and inherited by
+     every copy. Consecutive sections sit exactly on each other during a
+     transition, so a per-slide fit would have them changing size as they hand
+     over.
+
+     Lines are authored and never wrap, so the size style.css asks for would
+     overflow the frame the moment a headline gets long. Measure every line at
+     a reference size, then pull that size down just far enough for the longest
+     line and the tallest block to fit.
+  ------------------------------------------------------------------------ */
+
+  const REF = 100; // measure at this size, then scale the answer
+  const SIZE_VAR = "--mfa-title-size";
+
+  const fitTitle = () => {
+    // the left column is the probe: it always spans the whole frame, and its
+    // copy is only ever hidden with visibility, which leaves layout intact
+    const layer = stages.left.querySelector(".mfa-reel__copy-layer");
+    const titles = [
+      ...stages.left.querySelectorAll(
+        ".mfa-reel__copy-layer--left .mfa-reel__title",
+      ),
+    ];
+    if (!layer || !titles.length) return;
+
     // drop last pass's value so the stylesheet's own size resolves through the
     // var() fallback — that is the size we are allowed to ask for
-    for (const node of nodes) node.style.removeProperty(VAR);
+    root.style.removeProperty(SIZE_VAR);
+    const wanted = parseFloat(getComputedStyle(titles[0]).fontSize);
 
-    let size = Infinity;
+    const pad = getComputedStyle(layer);
+    const availW =
+      layer.clientWidth -
+      parseFloat(pad.paddingLeft) -
+      parseFloat(pad.paddingRight);
+    const availH =
+      layer.clientHeight -
+      parseFloat(pad.paddingTop) -
+      parseFloat(pad.paddingBottom);
+    if (availW <= 0 || availH <= 0) return;
 
-    for (const part of parts) {
-      // the layer, not the copy: the padding that bounds the text lives there
-      const layer = part.left.copy.querySelector(".mfa-reel__copy-layer");
-      const title = layer.querySelector(".mfa-reel__title");
-      const lines = [...title.children];
-      if (!lines.length) continue;
-
-      const cs = getComputedStyle(layer);
-      const availW =
-        layer.clientWidth -
-        parseFloat(cs.paddingLeft) -
-        parseFloat(cs.paddingRight);
-      const availH =
-        layer.clientHeight -
-        parseFloat(cs.paddingTop) -
-        parseFloat(cs.paddingBottom);
-      if (availW <= 0 || availH <= 0) continue;
-
-      const pref = parseFloat(getComputedStyle(title).fontSize);
-
+    let widest = 0;
+    let mostLines = 0;
+    for (const title of titles) {
       title.style.fontSize = REF + "px";
-      const widest = lines.reduce((w, line) => Math.max(w, line.scrollWidth), 0);
-      // read the leading back rather than duplicating it from the stylesheet
-      const leading = parseFloat(getComputedStyle(title).lineHeight) / REF;
-      title.style.fontSize = "";
-      if (!widest) continue;
-
-      size = Math.min(
-        size,
-        pref,
-        (availW * CONFIG.TITLE_FILL * REF) / widest,
-        (availH * CONFIG.TITLE_MAX_H) / (lines.length * leading),
-      );
+      for (const line of title.children) {
+        widest = Math.max(widest, line.scrollWidth);
+      }
+      mostLines = Math.max(mostLines, title.children.length);
     }
+    // read the leading back rather than duplicating it from the stylesheet
+    const leading = parseFloat(getComputedStyle(titles[0]).lineHeight) / REF;
+    for (const title of titles) title.style.fontSize = "";
+    if (!widest) return;
 
-    if (!Number.isFinite(size)) return;
-    const px = Math.max(CONFIG.TITLE_MIN, size).toFixed(2) + "px";
-    for (const node of nodes) node.style.setProperty(VAR, px);
+    const size = Math.min(
+      wanted,
+      (availW * CONFIG.TITLE_FILL * REF) / widest, // longest line fits across
+      (availH * CONFIG.TITLE_MAX_H) / (mostLines * leading), // tallest fits down
+    );
+
+    root.style.setProperty(
+      SIZE_VAR,
+      Math.max(CONFIG.TITLE_MIN, size).toFixed(2) + "px",
+    );
   };
 
-  const N = parts.length;
-  const { WIPE, STAGGER, HOLD } = CONFIG;
-  const step = WIPE + STAGGER + HOLD;
+  /* ---- the animation ----------------------------------------------------- */
 
-  /** Which way each column uncovers, and which one leads. Wide screens split
-   *  vertically (right wipes down, left follows upward); narrow ones split
-   *  horizontally, so the same choreography rotates onto the x axis. */
+  /** Which way each column is uncovered. Wide screens split down the middle —
+   *  the right column wipes down, the left wipes up. Narrow ones split across
+   *  instead, so the same move rotates onto the x axis. */
   const axesFor = (narrow) =>
     narrow
       ? {
-          left: { prop: "xPercent", from: 100, delay: 0 }, // top band, from the right
-          right: { prop: "xPercent", from: -100, delay: STAGGER },
+          left: { prop: "xPercent", edge: 100 }, // top band, in from the right
+          right: { prop: "xPercent", edge: -100 }, // bottom band, from the left
         }
       : {
-          right: { prop: "yPercent", from: -100, delay: 0 }, // wipes down
-          left: { prop: "yPercent", from: 100, delay: STAGGER }, // then up
+          left: { prop: "yPercent", edge: 100 }, // in from below
+          right: { prop: "yPercent", edge: -100 }, // in from above
         };
 
-  const buildTimeline = (axes) => {
-    const tl = gsap.timeline({ paused: true, defaults: { ease: "none" } });
+  /** One slide handing over to the next. Always exactly 1 long, and every
+   *  tween runs the full length from position 0 — the two columns move in
+   *  lockstep, so there is no position arithmetic anywhere in here. */
+  const transition = (from, to, axes) => {
+    const tl = gsap.timeline({ defaults: { duration: 1, ease: "none" } });
 
-    for (let k = 0; k < N - 1; k++) {
-      const at = HOLD + k * step;
-      const cut = at + WIPE + STAGGER; // the beat both columns have landed on
-      const from = parts[k];
-      const to = parts[k + 1];
-      const inCols = SIDES.map((side) => to[side]);
-      const outCols = SIDES.map((side) => from[side]);
-      const copies = [...outCols, ...inCols].map((c) => c.copy);
+    // an arriving layer starts offset and settles to rest
+    const arrive = (targets, offset) =>
+      tl.fromTo(targets, { yPercent: offset }, { yPercent: 0 }, 0);
 
-      /* Both headlines hand over to their column copies for the length of the
-         transition, so the mask governs the type exactly as it governs the
-         photos: the outgoing one is covered where the wipe has passed, the
-         incoming one uncovered. The front layer has to stand down for that —
-         it sits above both columns, so leaving it up would paint the outgoing
-         headline over the half already turned over to the next slide. The
-         swap is invisible: both copies are at rest on the same pixels. */
-      tl.set(from.front, { autoAlpha: 0 }, at);
-      tl.set(copies, { autoAlpha: 1 }, at);
-
-      for (const side of SIDES) {
-        const a = axes[side];
-        const col = to[side];
-        // mask slides in from off-frame, content pushes back by the same
-        // amount — so it is uncovered in place rather than travelling
-        tl.fromTo(
-          col.slide,
-          { [a.prop]: a.from },
-          { [a.prop]: 0, duration: WIPE },
-          at + a.delay,
-        );
-        tl.fromTo(
-          col.inner,
-          { [a.prop]: -a.from },
-          { [a.prop]: 0, duration: WIPE },
-          at + a.delay,
-        );
-      }
-
-      /* Parallax. Deliberately the same in both columns: the outgoing photo is
-         still on show either side of the split while the wipe runs, so any
-         per-column offset would tear the picture along that line. One drift,
-         one direction — the columns only ever differ in what they uncover. */
-      const span = WIPE + STAGGER;
-      const drift = (targets, from0, to0, prop = "yPercent") =>
-        tl.fromTo(
-          targets,
-          { [prop]: from0 },
-          // immediateRender off on the outgoing pass, or it would stomp the
-          // resting state the incoming pass left on the same element
-          { [prop]: to0, duration: span, immediateRender: from0 !== 0 },
-          at,
-        );
-
-      drift(
-        inCols.map((c) => c.mediaInner),
-        CONFIG.PARALLAX_MEDIA,
+    // a leaving layer starts at rest and carries on the same way. GSAP would
+    // otherwise apply this "from" as soon as the tween is built, snapping the
+    // slide out of place long before its turn comes round.
+    const leave = (targets, offset) =>
+      tl.fromTo(
+        targets,
+        { yPercent: 0 },
+        { yPercent: offset, immediateRender: false },
         0,
       );
-      drift(
-        inCols.map((c) => c.copy),
-        CONFIG.PARALLAX_COPY,
-        0,
-      );
-      // outgoing layers keep travelling the same way as they get covered
-      drift(
-        outCols.map((c) => c.mediaInner),
-        0,
-        -CONFIG.PARALLAX_MEDIA,
-      );
-      drift(
-        outCols.map((c) => c.copy),
-        0,
-        -CONFIG.PARALLAX_COPY,
-      );
 
-      /* The split. The content is cut down its middle and the two halves shear
-         past each other vertically, closing back to 0 at `cut` — where they
-         line up into exactly the whole headline the front layer is holding, so
-         it can take back over without a seam.
-
-         Vertical movement is the point. The cut is vertical, so travelling
-         along it keeps the halves touching the whole way: the line never opens
-         and no glyph is torn across. Moving them across the cut instead is
-         what puts a gap through the type.
-
-         Each half runs with the column it shows through — the left half rises
-         like the left column's wipe, the right half descends like the right's. */
-      const { SPLIT_SHIFT } = CONFIG;
-      const half = (columns, i) => columns.map((c) => c.layers[i]);
-
-      drift(half(inCols, 0), SPLIT_SHIFT, 0);
-      drift(half(inCols, 1), -SPLIT_SHIFT, 0);
-      drift(half(outCols, 0), 0, -SPLIT_SHIFT);
-      drift(half(outCols, 1), 0, SPLIT_SHIFT);
-
-      // the wipe has landed: the front layer takes the new headline back over,
-      // and both column copies stand down again
-      tl.set(to.front, { autoAlpha: 1 }, cut);
-      tl.set(copies, { autoAlpha: 0 }, cut);
+    // 1. the wipe — the mask slides in from off-frame while the content inside
+    //    counter-moves by the same amount, so the new slide is uncovered in
+    //    place rather than travelling
+    for (const side of COLUMNS) {
+      const { prop, edge } = axes[side];
+      tl.fromTo(to[side].slide, { [prop]: edge }, { [prop]: 0 }, 0);
+      tl.fromTo(to[side].inner, { [prop]: -edge }, { [prop]: 0 }, 0);
     }
 
-    // trailing rest, so the last slide is not sitting on the end of the scroll
-    tl.to({}, { duration: HOLD }, (N - 1) * step);
+    // 2. parallax — both columns get identical values on purpose. The outgoing
+    //    photo is still on show either side of the split while the wipe runs,
+    //    so a per-column offset would tear the picture along that line.
+    arrive(both(to, "mediaInner"), CONFIG.PARALLAX_MEDIA);
+    arrive(both(to, "copy"), CONFIG.PARALLAX_COPY);
+    leave(both(from, "mediaInner"), -CONFIG.PARALLAX_MEDIA);
+    leave(both(from, "copy"), -CONFIG.PARALLAX_COPY);
+
+    // 3. the split — the two halves of the text shear past each other. Moving
+    //    along the cut rather than across it is what keeps the line closed, so
+    //    no glyph is ever torn open. Each half runs with the column it shows
+    //    through: the left half rises like the left column, the right descends.
+    arrive(both(to, "leftHalf"), CONFIG.SPLIT_SHIFT);
+    arrive(both(to, "rightHalf"), -CONFIG.SPLIT_SHIFT);
+    leave(both(from, "leftHalf"), -CONFIG.SPLIT_SHIFT);
+    leave(both(from, "rightHalf"), CONFIG.SPLIT_SHIFT);
+
+    // 4. the handover — the front layer sits above both columns, so it stands
+    //    down for the length of the wipe and lets the column copies take over.
+    //    Leaving it up would paint the outgoing headline over the half already
+    //    turned over to the next slide. Both swaps are invisible, because the
+    //    copies are on the very same pixels at rest.
+    const copies = [...both(from, "copy"), ...both(to, "copy")];
+    tl.set(from.front, { autoAlpha: 0 }, 0)
+      .set(copies, { autoAlpha: 1 }, 0)
+      .set(to.front, { autoAlpha: 1 }, 1)
+      .set(copies, { autoAlpha: 0 }, 1);
+
     return tl;
   };
 
-  fitTitles();
+  /** The whole reel: rest, transition, rest, transition… and a rest at the end
+   *  so the last slide is not parked on the very bottom of the scroll. */
+  const buildTimeline = (axes) => {
+    const master = gsap.timeline({ paused: true });
+
+    slides.forEach((slide, i) => {
+      const next = slides[i + 1];
+      if (next) master.add(transition(slide, next, axes), "+=" + CONFIG.REST);
+    });
+
+    return master.to({}, { duration: CONFIG.REST });
+  };
+
+  /* ---- start ------------------------------------------------------------ */
+
+  fitTitle();
 
   const mm = gsap.matchMedia();
   const cleanups = [() => mm.revert()];
@@ -487,47 +474,51 @@ const CONFIG = {
       narrow: `(prefers-reduced-motion: no-preference) and (max-width: ${CONFIG.NARROW}px)`,
     },
     (ctx) => {
-      // reduced motion: no pin, no wipe. Deliberately writes no inline styles —
-      // the .mfa-reel--still rules in style.css are the whole story.
+      // reduced motion: no pin, no wipe, just a list of full-height slides.
+      // Deliberately writes no inline styles — the .mfa-reel--still rules in
+      // style.css are the whole story.
       if (ctx.conditions.still) {
         root.classList.add("mfa-reel--still");
-        setDuplicate(halves[0], false); // the left column becomes the content
+        setDuplicate(columnEls[0], false); // the left column becomes the content
         return () => {
           root.classList.remove("mfa-reel--still");
-          setDuplicate(halves[0], true);
+          setDuplicate(columnEls[0], true);
         };
       }
 
-      // starting frame: slide 0 already landed, everything else off-frame
+      // opening frame: slide 0 already landed, every other slide off-frame
       gsap.set(
-        parts.map((p) => p.front),
+        slides.map((s) => s.front),
         { autoAlpha: 0 },
       );
-      gsap.set(parts[0].front, { autoAlpha: 1 });
+      gsap.set(slides[0].front, { autoAlpha: 1 });
       gsap.set(
-        parts.flatMap((p) => SIDES.map((side) => p[side].copy)),
+        slides.flatMap((s) => both(s, "copy")),
         { autoAlpha: 0 },
       );
 
-      if (N < 2) return; // single slide: nothing to transition to
+      if (slides.length < 2) return; // one slide: nothing to transition to
 
-      const tl = buildTimeline(axesFor(ctx.conditions.narrow));
+      const timeline = buildTimeline(axesFor(ctx.conditions.narrow));
 
-      const st = ScrollTrigger.create({
+      const scroll = ScrollTrigger.create({
         trigger: root,
         start: "top top",
-        end: () => "+=" + window.innerHeight * CONFIG.SLIDE_VH * (N - 1),
+        end: () =>
+          "+=" +
+          window.innerHeight * CONFIG.SCROLL_PER_SLIDE * (slides.length - 1),
         pin,
         pinSpacing: true,
         anticipatePin: 1,
-        scrub: CONFIG.SCRUB,
         invalidateOnRefresh: true,
-        animation: tl,
+        // scroll progress drives timeline progress; scrub is the catch-up lag
+        animation: timeline,
+        scrub: CONFIG.SCRUB,
       });
 
       return () => {
-        st.kill();
-        tl.kill();
+        scroll.kill();
+        timeline.kill();
       };
     },
   );
@@ -539,7 +530,7 @@ const CONFIG = {
     if (queued) return;
     queued = requestAnimationFrame(() => {
       queued = 0;
-      fitTitles();
+      fitTitle();
     });
   };
   window.addEventListener("resize", onResize);
@@ -549,7 +540,7 @@ const CONFIG = {
   });
 
   // the first measurement ran on fallback metrics; redo it on the real face
-  document.fonts?.ready.then(fitTitles);
+  document.fonts?.ready.then(fitTitle);
 
   // late-decoding photos change nothing about our height, but the host page's
   // might — re-measure once everything has settled
