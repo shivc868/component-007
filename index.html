@@ -21,36 +21,41 @@
       columns, and the next slide wipes DOWN in the right one and UP in the
       left one, both at the same rate.
 
-      Only these four boxes are written by hand. Everything inside the two
-      stages is built from the CONTENT array at the top of src/main.js, so
-      adding or removing a slide needs no edits in this file.
-
         __pin              pinned frame; nothing inside it scrolls
           __column--left     50%-wide window, clips everything inside it
             __stage            full-frame wide, so content ignores the column
           __column--right    the same again
-          __front            current slide's text, whole and unclipped
           __chrome           site nav and footer, never clipped
 
       Each column carries its own full-width copy of every slide and only clips
       it, which is what lets a headline read straight across the split. The
       text is cut down that same middle line into two halves that shear past
       each other as a slide changes, then close back into one.
+
+      Write each slide ONCE, in the template at the bottom of this file.
+      main.js clones it into both columns and doubles the text so the halves
+      have something to shear. The two stages start empty on purpose — never
+      put slides in them by hand.
     -->
     <section class="mfa-reel" aria-label="Selected work">
       <div class="mfa-reel__pin" data-mfa-pin>
-        <div class="mfa-reel__column mfa-reel__column--left" data-mfa-column="left">
+        <!-- the left column carries the readable copy of the text; the right
+             one is a pixel duplicate of it, so it is hidden from assistive
+             tech here rather than in JS -->
+        <div class="mfa-reel__column mfa-reel__column--left">
           <div class="mfa-reel__stage" data-mfa-stage="left"></div>
         </div>
-        <div class="mfa-reel__column mfa-reel__column--right" data-mfa-column="right">
+        <div
+          class="mfa-reel__column mfa-reel__column--right"
+          aria-hidden="true"
+        >
           <div class="mfa-reel__stage" data-mfa-stage="right"></div>
         </div>
 
-        <!-- current slide's copy: unclipped, above both columns, and the only
-             copy that is interactive or exposed to assistive tech -->
-        <div class="mfa-reel__front" data-mfa-front></div>
-
-        <nav class="mfa-reel__chrome mfa-reel__chrome--top" aria-label="Primary">
+        <nav
+          class="mfa-reel__chrome mfa-reel__chrome--top"
+          aria-label="Primary"
+        >
           <a class="mfa-reel__chrome-item" href="#work">Work</a>
           <a class="mfa-reel__chrome-item" href="#info">Info</a>
           <a class="mfa-reel__chrome-item" href="#contact">Contact us</a>
@@ -62,6 +67,233 @@
           <span class="mfa-reel__chrome-item">Grit</span>
         </p>
       </div>
+
+      <!--
+        THE SLIDES — this is the part you edit.
+
+        One <article> per slide, in order. Add, remove or reorder them freely;
+        nothing else in this file and nothing in main.js needs to change.
+
+          style="--mfa-accent"  the slide's colour: headline and every label
+          __img                 one or two per slide; two share the frame
+          __kicker-line         one per line above the headline
+          __line                one word per line, two lines. They never wrap,
+                                so keep them to single words — and if a word is
+                                longer than 10 characters, raise
+                                --mfa-longest-line in style.css to match
+          __status              the small line under the headline
+          __cta                 optional — delete the tag for a slide with no link
+
+        Keep fetchpriority="high" on the first slide's photo and "low" on the
+        rest: only the first slide is on screen when the page loads, but the
+        others still have to load up front. Do NOT use loading="lazy" here —
+        off-screen slides are moved into place with transforms, which never
+        trips the lazy-load threshold, so the photo arrives as a black frame.
+      -->
+      <template data-mfa-slides>
+        <article class="mfa-reel__slide" style="--mfa-accent: #7fe9fb">
+          <div class="mfa-reel__inner">
+            <div class="mfa-reel__media">
+              <div class="mfa-reel__media-inner">
+                <img
+                  class="mfa-reel__img"
+                  src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1600&q=80"
+                  alt=""
+                  fetchpriority="high"
+                  decoding="async"
+                />
+              </div>
+            </div>
+            <div class="mfa-reel__veil"></div>
+            <div class="mfa-reel__copy">
+              <div class="mfa-reel__copy-layer">
+                <p class="mfa-reel__kicker">
+                  <span class="mfa-reel__kicker-line">Content &amp; Marketing</span>
+                  <span class="mfa-reel__kicker-line">Web &amp; Digital</span>
+                  <span class="mfa-reel__kicker-line">Brand &amp; Identity</span>
+                </p>
+                <h2 class="mfa-reel__title">
+                  <span class="mfa-reel__line">OpenAI</span>
+                  <span class="mfa-reel__line">Business</span>
+                </h2>
+                <p class="mfa-reel__status">Coming soon</p>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="mfa-reel__slide" style="--mfa-accent: #d9b8ff">
+          <div class="mfa-reel__inner">
+            <div class="mfa-reel__media">
+              <div class="mfa-reel__media-inner">
+                <img
+                  class="mfa-reel__img"
+                  src="https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1200&q=80"
+                  alt=""
+                  fetchpriority="low"
+                  decoding="async"
+                />
+                <img
+                  class="mfa-reel__img"
+                  src="https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1200&q=80"
+                  alt=""
+                  fetchpriority="low"
+                  decoding="async"
+                />
+              </div>
+            </div>
+            <div class="mfa-reel__veil"></div>
+            <div class="mfa-reel__copy">
+              <div class="mfa-reel__copy-layer">
+                <p class="mfa-reel__kicker">
+                  <span class="mfa-reel__kicker-line">Feature Documentary</span>
+                </p>
+                <h2 class="mfa-reel__title">
+                  <span class="mfa-reel__line">Creative</span>
+                  <span class="mfa-reel__line">Docuseries</span>
+                </h2>
+                <p class="mfa-reel__status">Coming soon</p>
+                <a class="mfa-reel__cta" href="#">View full project</a>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="mfa-reel__slide" style="--mfa-accent: #c8ff4d">
+          <div class="mfa-reel__inner">
+            <div class="mfa-reel__media">
+              <div class="mfa-reel__media-inner">
+                <img
+                  class="mfa-reel__img"
+                  src="https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=1200&q=80"
+                  alt=""
+                  fetchpriority="low"
+                  decoding="async"
+                />
+                <img
+                  class="mfa-reel__img"
+                  src="https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1200&q=80"
+                  alt=""
+                  fetchpriority="low"
+                  decoding="async"
+                />
+              </div>
+            </div>
+            <div class="mfa-reel__veil"></div>
+            <div class="mfa-reel__copy">
+              <div class="mfa-reel__copy-layer">
+                <p class="mfa-reel__kicker">
+                  <span class="mfa-reel__kicker-line">Campaign</span>
+                  <span class="mfa-reel__kicker-line">Film &amp; Photography</span>
+                </p>
+                <h2 class="mfa-reel__title">
+                  <span class="mfa-reel__line">Northbound</span>
+                  <span class="mfa-reel__line">Supply</span>
+                </h2>
+                <p class="mfa-reel__status">Live now</p>
+                <a class="mfa-reel__cta" href="#">View full project</a>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="mfa-reel__slide" style="--mfa-accent: #ff7a5a">
+          <div class="mfa-reel__inner">
+            <div class="mfa-reel__media">
+              <div class="mfa-reel__media-inner">
+                <img
+                  class="mfa-reel__img"
+                  src="https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1600&q=80"
+                  alt=""
+                  fetchpriority="low"
+                  decoding="async"
+                />
+              </div>
+            </div>
+            <div class="mfa-reel__veil"></div>
+            <div class="mfa-reel__copy">
+              <div class="mfa-reel__copy-layer">
+                <p class="mfa-reel__kicker">
+                  <span class="mfa-reel__kicker-line">Identity System</span>
+                </p>
+                <h2 class="mfa-reel__title">
+                  <span class="mfa-reel__line">Signal</span>
+                  <span class="mfa-reel__line">Studios</span>
+                </h2>
+                <p class="mfa-reel__status">2026</p>
+                <a class="mfa-reel__cta" href="#">View full project</a>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="mfa-reel__slide" style="--mfa-accent: #ffd166">
+          <div class="mfa-reel__inner">
+            <div class="mfa-reel__media">
+              <div class="mfa-reel__media-inner">
+                <img
+                  class="mfa-reel__img"
+                  src="https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=1200&q=80"
+                  alt=""
+                  fetchpriority="low"
+                  decoding="async"
+                />
+                <img
+                  class="mfa-reel__img"
+                  src="https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&w=1200&q=80"
+                  alt=""
+                  fetchpriority="low"
+                  decoding="async"
+                />
+              </div>
+            </div>
+            <div class="mfa-reel__veil"></div>
+            <div class="mfa-reel__copy">
+              <div class="mfa-reel__copy-layer">
+                <p class="mfa-reel__kicker">
+                  <span class="mfa-reel__kicker-line">Album Campaign</span>
+                </p>
+                <h2 class="mfa-reel__title">
+                  <span class="mfa-reel__line">Midnight</span>
+                  <span class="mfa-reel__line">Atlas</span>
+                </h2>
+                <p class="mfa-reel__status">Live now</p>
+                <a class="mfa-reel__cta" href="#">View full project</a>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="mfa-reel__slide" style="--mfa-accent: #7dffb3">
+          <div class="mfa-reel__inner">
+            <div class="mfa-reel__media">
+              <div class="mfa-reel__media-inner">
+                <img
+                  class="mfa-reel__img"
+                  src="https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=1600&q=80"
+                  alt=""
+                  fetchpriority="low"
+                  decoding="async"
+                />
+              </div>
+            </div>
+            <div class="mfa-reel__veil"></div>
+            <div class="mfa-reel__copy">
+              <div class="mfa-reel__copy-layer">
+                <p class="mfa-reel__kicker">
+                  <span class="mfa-reel__kicker-line">Brand Film</span>
+                </p>
+                <h2 class="mfa-reel__title">
+                  <span class="mfa-reel__line">Paper</span>
+                  <span class="mfa-reel__line">Tiger</span>
+                </h2>
+                <p class="mfa-reel__status">Coming soon</p>
+                <a class="mfa-reel__cta" href="#">View full project</a>
+              </div>
+            </div>
+          </div>
+        </article>
+      </template>
     </section>
 
     <script type="module" src="/src/main.js"></script>

@@ -25,8 +25,36 @@
   --mfa-micro: clamp(9px, 0.72vw, 13px); /* chrome, kicker, status, cta */
   --mfa-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     Helvetica, Arial, sans-serif;
-  /* per-slide, written inline by main.js from CONTENT[].accent */
+  /* per-slide; set inline on each <article> in index.html */
   --mfa-accent: #f4f4f0;
+
+  /* ----- headline size -----
+     One size for every slide: slides sit exactly on top of each other during a
+     transition and must not change size as they hand over.
+
+     Headline lines never wrap, so a long one would run off the frame. CSS
+     cannot measure text, so the fit is declared rather than computed:
+
+       --mfa-longest-line  characters in the longest __line anywhere in the
+                           reel. Update this when you edit a headline.
+       --mfa-cap           average width of one capital in the headline face,
+                           in em, with a little slack so a line never reaches
+                           the gutter. Re-measure only if you change the font:
+                           set a headline to 100px, read its width, and divide
+                           by 100 x its character count.
+       --mfa-title-lines   most lines in any one headline.
+
+     Two headlines of the same length but very different letters (all I's
+     against all W's) will not fit identically — this is an estimate, not a
+     measurement. Nudge --mfa-cap if a headline sits too tight or too loose. */
+  --mfa-longest-line: 10; /* "DOCUSERIES", "NORTHBOUND" */
+  /* Inter 900, uppercase, -0.035em tracking. The widest real word measures
+     about 0.70em per character; this carries ~3% over that so a word made of
+     unusually wide letters still clears the gutter. */
+  --mfa-cap: 0.72;
+  --mfa-title-lines: 2; /* one word on top, one below */
+  --mfa-title-leading: 0.78;
+  --mfa-title-look: 12.4cqw; /* the size it wants when nothing constrains it */
 
   position: relative;
   display: block;
@@ -58,7 +86,6 @@
   width: 50%;
   height: 100%;
   overflow: hidden;
-  pointer-events: none; /* the front layer takes all input */
 }
 
 .mfa-reel__column--left {
@@ -74,6 +101,9 @@
   top: 0;
   width: 200%;
   height: 100%;
+  /* lets the headline size off the frame's width rather than the viewport's,
+     so the component still fits if the host page gives it less than full width */
+  container-type: inline-size;
 }
 
 .mfa-reel__column--left .mfa-reel__stage {
@@ -192,11 +222,13 @@
   will-change: transform;
 }
 
-.mfa-reel__copy-layer--left {
+/* Cut by position, so main.js needs no marker classes: main.js clones the
+   layer, and the original becomes the left half and the clone the right. */
+.mfa-reel__copy-layer:first-child {
   clip-path: inset(0 calc(50% - 0.5px) 0 0);
 }
 
-.mfa-reel__copy-layer--right {
+.mfa-reel__copy-layer:last-child {
   clip-path: inset(0 0 0 50%);
 }
 
@@ -212,14 +244,20 @@
   text-transform: uppercase;
 }
 
-/* Lines never wrap — the break is wherever CONTENT[].title puts it — so
-   main.js measures the widest one and writes --mfa-title-size to fit the
-   frame. The clamp is only the pre-measurement fallback. */
+/* The size it wants, capped so the longest line still fits across the frame
+   and the tallest headline still fits down it. See --mfa-cap above. */
 .mfa-reel__title {
   margin: clamp(10px, 2vh, 26px) 0;
-  font-size: var(--mfa-title-size, clamp(2.4rem, 12.4vw, 15.5rem));
+  font-size: min(
+    var(--mfa-title-look),
+    calc(
+      (100cqw - 2 * var(--mfa-gutter)) /
+        (var(--mfa-longest-line) * var(--mfa-cap))
+    ),
+    calc(62svh / (var(--mfa-title-lines) * var(--mfa-title-leading)))
+  );
   font-weight: 900;
-  line-height: 0.78;
+  line-height: var(--mfa-title-leading);
   letter-spacing: -0.035em;
   text-transform: uppercase;
 }
@@ -246,20 +284,6 @@
 .mfa-reel__cta:hover,
 .mfa-reel__cta:focus-visible {
   opacity: 1;
-}
-
-/* ----- front layer -----
-   Holds one copy per slide, only the current one visible. Above both columns,
-   so the outgoing headline stays whole while the wipe runs under it. */
-.mfa-reel__front {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-}
-
-.mfa-reel__front .mfa-reel__cta {
-  pointer-events: auto;
 }
 
 /* ----- chrome -----
@@ -355,11 +379,11 @@ a.mfa-reel__chrome-item:focus-visible {
     top: -100%;
   }
 
-  /* a phone-width frame wants a much larger share than 12.4vw to read as the
-     same design — main.js still shrinks whatever would overflow */
-  .mfa-reel__title {
-    font-size: var(--mfa-title-size, clamp(2.4rem, 21vw, 9rem));
-    line-height: 0.84;
+  /* a phone-width frame wants a much larger share of it to read as the same
+     design; the caps on the size itself still apply */
+  .mfa-reel {
+    --mfa-title-look: 21cqw;
+    --mfa-title-leading: 0.84;
   }
 
   /* stacked images get too narrow to read at phone widths — show the first */
@@ -370,63 +394,64 @@ a.mfa-reel__chrome-item:focus-visible {
 
 /* ----- reduced motion -----
    No pin, no wipe: the reel collapses into an honest scrollable list of
-   full-height slides. main.js writes no inline styles in this mode, so these
-   rules are the whole story. */
-.mfa-reel--still .mfa-reel__column--right,
-.mfa-reel--still .mfa-reel__front,
-.mfa-reel--still .mfa-reel__chrome--bottom {
-  display: none;
-}
+   full-height slides. main.js builds nothing at all in this mode — it never
+   even matches — so these rules are the whole story. Last in the file so they
+   win over the narrow-screen block above. */
+@media (prefers-reduced-motion: reduce) {
+  .mfa-reel__column--right,
+  .mfa-reel__chrome--bottom {
+    display: none;
+  }
 
-.mfa-reel--still .mfa-reel__pin {
-  height: auto;
-  overflow: visible;
-  display: flex;
-  flex-direction: column;
-}
+  .mfa-reel__pin {
+    height: auto;
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+  }
 
-.mfa-reel--still .mfa-reel__column--left {
-  position: static;
-  width: 100%;
-  height: auto;
-  overflow: visible;
-  pointer-events: auto;
-}
+  .mfa-reel__column--left {
+    position: static;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
 
-.mfa-reel--still .mfa-reel__stage {
-  position: static;
-  width: 100%;
-  height: auto;
-}
+  .mfa-reel__stage {
+    position: static;
+    width: 100%;
+    height: auto;
+  }
 
-.mfa-reel--still .mfa-reel__slide {
-  position: relative;
-  inset: auto;
-  height: 100svh;
-}
+  .mfa-reel__slide {
+    position: relative;
+    inset: auto;
+    height: 100svh;
+  }
 
-.mfa-reel--still .mfa-reel__inner {
-  position: absolute;
-  inset: 0;
-}
+  .mfa-reel__inner {
+    position: absolute;
+    inset: 0;
+  }
 
-/* one whole rendering, not two clipped halves — otherwise the still fallback
-   would hand assistive tech a duplicate of every headline and link */
-.mfa-reel--still .mfa-reel__copy-layer--right {
-  display: none;
-}
+  /* one whole rendering, not two clipped halves — otherwise this fallback
+     would hand assistive tech a duplicate of every headline and link */
+  .mfa-reel__copy-layer:last-child {
+    display: none;
+  }
 
-.mfa-reel--still .mfa-reel__copy-layer--left {
-  clip-path: none;
-}
+  .mfa-reel__copy-layer:first-child {
+    clip-path: none;
+  }
 
-/* the chrome is last in the markup so it paints over the columns; in flow that
-   would put it below every slide, so order pulls it back to the top */
-.mfa-reel--still .mfa-reel__chrome--top {
-  position: sticky;
-  top: 0;
-  order: -1;
-  padding-top: var(--mfa-edge);
-  padding-bottom: var(--mfa-edge);
-  background: var(--mfa-bg);
+  /* the chrome is last in the markup so it paints over the columns; in flow
+     that would put it below every slide, so order pulls it back to the top */
+  .mfa-reel__chrome--top {
+    position: sticky;
+    top: 0;
+    order: -1;
+    padding-top: var(--mfa-edge);
+    padding-bottom: var(--mfa-edge);
+    background: var(--mfa-bg);
+  }
 }
