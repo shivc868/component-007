@@ -74,6 +74,14 @@
   /* internal z-indexes stay inside this stacking context — they can never
      fight the host page's header or modals */
   isolation: isolate;
+  /* ScrollTrigger pins by writing a fixed PIXEL width onto a spacer it inserts
+     here. It takes that measurement while briefly un-pinned, and because this
+     section is only one viewport tall on its own, the page loses its vertical
+     scrollbar for that instant — so on any browser with classic scrollbars it
+     measures ~15px too wide and the page gains a horizontal scrollbar. Clip
+     absorbs it. (Not `hidden`: that would make this a scroll container and
+     break the pinning. Clip does not.) */
+  overflow-x: clip;
 }
 
 /* ----- pinned viewport -----
