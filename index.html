@@ -15,33 +15,22 @@
   </head>
   <body>
     <!--
-      REEL — the component.
+      REEL — pinned split-column showreel. The frame is cut down the middle;
+      the next slide wipes up in the left column and down in the right one.
 
-      A pinned full-frame showreel. The frame is split down the middle into two
-      columns, and the next slide wipes DOWN in the right one and UP in the
-      left one, both at the same rate.
+        __pin              pinned frame, nothing inside scrolls
+          __column--left     50%-wide window, clips its contents
+            __stage            full-frame wide
+          __column--right    same again
+          __chrome           nav and wordmark, never clipped
 
-        __pin              pinned frame; nothing inside it scrolls
-          __column--left     50%-wide window, clips everything inside it
-            __stage            full-frame wide, so content ignores the column
-          __column--right    the same again
-          __chrome           site nav and footer, never clipped
-
-      Each column carries its own full-width copy of every slide and only clips
-      it, which is what lets a headline read straight across the split. The
-      text is cut down that same middle line into two halves that shear past
-      each other as a slide changes, then close back into one.
-
-      Write each slide ONCE, in the template at the bottom of this file.
-      main.js clones it into both columns and doubles the text so the halves
-      have something to shear. The two stages start empty on purpose — never
-      put slides in them by hand.
+      Slides are written once, in the <template> below. main.js clones them
+      into both stages, so leave the stages empty.
     -->
     <section class="mfa-reel" aria-label="Selected work">
       <div class="mfa-reel__pin" data-mfa-pin>
-        <!-- the left column carries the readable copy of the text; the right
-             one is a pixel duplicate, so `inert` takes it out of both the
-             screen reader and the tab order in one attribute -->
+        <!-- the right column is a visual duplicate of the left, so inert takes
+             it out of the screen reader and the tab order -->
         <div class="mfa-reel__column mfa-reel__column--left">
           <div class="mfa-reel__stage" data-mfa-stage="left"></div>
         </div>
@@ -67,26 +56,21 @@
       </div>
 
       <!--
-        THE SLIDES — this is the part you edit.
+        THE SLIDES — one <article> each, in order. Add, remove or reorder
+        freely.
 
-        One <article> per slide, in order. Add, remove or reorder them freely;
-        nothing else in this file and nothing in main.js needs to change.
-
-          style="--mfa-accent"  the slide's colour: headline and every label
-          __img                 one or two per slide; two share the frame
+          style="--mfa-accent"  headline and label colour for the slide
+          __img                 one or two per slide
           __kicker-line         one per line above the headline
-          __line                one word per line, two lines. They never wrap,
-                                so keep them to single words — and if a word is
-                                longer than 10 characters, raise
-                                --mfa-longest-line in style.css to match
-          __status              the small line under the headline
-          __cta                 optional — delete the tag for a slide with no link
+          __line                one word per line; lines never wrap, so if a
+                                word runs past 10 characters raise
+                                --mfa-longest-line in style.css
+          __status              small line under the headline
+          __cta                 optional
 
-        Keep fetchpriority="high" on the first slide's photo and "low" on the
-        rest: only the first slide is on screen when the page loads, but the
-        others still have to load up front. Do NOT use loading="lazy" here —
-        off-screen slides are moved into place with transforms, which never
-        trips the lazy-load threshold, so the photo arrives as a black frame.
+        fetchpriority stays "high" on the first photo and "low" on the rest.
+        No loading="lazy": off-screen slides are positioned with transforms,
+        so lazy images never trip their threshold and arrive as black frames.
       -->
       <template data-mfa-slides>
         <article class="mfa-reel__slide" style="--mfa-accent: #7fe9fb">

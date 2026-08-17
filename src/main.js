@@ -1,5 +1,5 @@
 import "./style.css";
-import "./demo.css"; // showcase page styles only — do NOT copy into your project
+import "./demo.css"; // demo page only
 import "lenis/dist/lenis.css";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -11,20 +11,19 @@ const SMOOTH_SCROLL = true;
 
 if (SMOOTH_SCROLL && !window.lenis) {
   const lenis = new Lenis({ autoRaf: false, anchors: true });
-  window.lenis = lenis; // expose so other scripts (or a second copy) reuse it
+  window.lenis = lenis;
   lenis.on("scroll", ScrollTrigger.update);
   gsap.ticker.add((time) => lenis.raf(time * 1000));
   gsap.ticker.lagSmoothing(0);
 }
 
 const CONFIG = {
-  SCROLL_PER_SLIDE: 1, // viewport heights of scroll each transition takes
-  SCRUB: 0.6, // seconds the animation lags the scrollbar — 0 to lock to it
-  PARALLAX_MEDIA: 10, // how far the photo drifts — raising it needs a bigger
-  //                     --mfa-overscan in style.css; the rule is written there
-  PARALLAX_COPY: 4.5, // and the text drifts less, which is what reads as depth
-  SPLIT_SHIFT: 9, // how far the two halves of the text slide past each other
-  TEXT_SPAN: 0.8, // share of a change the text takes; 1 finishes with the wipe
+  SCROLL_PER_SLIDE: 1, // viewport heights of scroll per transition
+  SCRUB: 0.6, // scrub lag in seconds
+  PARALLAX_MEDIA: 10, // photo drift; raising it needs a bigger --mfa-overscan
+  PARALLAX_COPY: 4.5, // text drifts less than the photo
+  SPLIT_SHIFT: 9, // shear between the two text halves
+  TEXT_SPAN: 0.8, // share of a transition the text takes
 };
 
 (function mfaReel() {
@@ -37,11 +36,9 @@ const CONFIG = {
   const rightStage = reel.querySelector('[data-mfa-stage="right"]');
   if (!pin || !template || !leftStage || !rightStage) return;
 
-  // Both columns need the slides, because each clips them differently, and
-  // each slide needs its text twice, because the halves slide past each other.
-  // That is four copies of every headline, so they are cloned rather than
-  // written out. The twin is a pixel duplicate — inert keeps screen readers
-  // and the tab key from meeting the same text twice.
+  // Each column gets its own copy of the slides, and each slide's copy block
+  // gets a second layer for the two halves to shear. The twin is a visual
+  // duplicate, so inert keeps it out of the a11y tree and tab order.
   for (const copy of template.content.querySelectorAll(".mfa-reel__copy")) {
     const twin = copy.firstElementChild.cloneNode(true);
     twin.inert = true;
@@ -55,8 +52,8 @@ const CONFIG = {
     const text = slide.querySelector(".mfa-reel__copy");
 
     return {
-      mask: slide, // slides in from off-frame and uncovers the slide
-      inner: slide.firstElementChild, // slides back, so the content holds still
+      mask: slide, // slides in from off-frame
+      inner: slide.firstElementChild, // counter-moves so content holds still
       photo: slide.querySelector(".mfa-reel__media-inner"),
       text: text,
       textLeft: text.firstElementChild,
@@ -71,11 +68,10 @@ const CONFIG = {
       right: partsOf(rightStage, i),
     });
   }
-  if (slides.length < 2) return; // one slide: nothing to change into
+  if (slides.length < 2) return;
 
-  // The same part from both columns. They always move by the same amount: the
-  // outgoing photo is still on show either side of the split while the wipe
-  // runs, so moving one column differently would tear it along that line.
+  // The same part from both columns. Both must move by the same amount or the
+  // image tears along the split while the wipe runs.
   function inBothColumns(slide, partName) {
     return [slide.left[partName], slide.right[partName]];
   }
@@ -83,17 +79,11 @@ const CONFIG = {
   function buildChange(current, next) {
     const change = gsap.timeline({ defaults: { ease: "none" } });
 
-    // Moves elements up or down, from one offset to another, where `length` is
-    // how much of the change it takes up (1 being all of it).
+    // yPercent tween from start to end over `length` of the transition,
+    // centred so it reads the same scrolling either way.
     //
-    // Centred, so a change looks the same scrolled up or down — scrolling back
-    // plays it in reverse, and anything weighted towards one end would read
-    // differently in each direction.
-    //
-    // Elements starting at rest (start is 0) are the ones leaving. GSAP would
-    // normally jump an element to its starting value the moment this line
-    // runs, which for those would yank the slide out of place long before its
-    // turn, so immediateRender switches that off.
+    // start === 0 means the element is on screen and leaving; immediateRender
+    // is off there so GSAP does not snap it into place ahead of its turn.
     function move(elements, start, end, length) {
       change.fromTo(
         elements,
@@ -103,31 +93,26 @@ const CONFIG = {
       );
     }
 
-    // The wipe. The mask slides in from off-frame while the content inside
-    // slides back by the same amount, so the new slide is uncovered where it
-    // already is instead of travelling into place. The left column is
-    // uncovered from below, the right one from above.
+    // The wipe: mask in, inner back by the same amount, so the incoming slide
+    // is uncovered in place. Left uncovers from below, right from above.
     move([next.left.mask], 100, 0, 1);
     move([next.left.inner], -100, 0, 1);
     move([next.right.mask], -100, 0, 1);
     move([next.right.inner], 100, 0, 1);
 
-    // The photo, drifting the whole way. It passes through 0 exactly as the
-    // change ends and picks up from 0 in the next, in the same direction —
-    // which is what runs one change into the next without a seam.
+    // The photo drifts the whole way, passing through 0 as the change ends and
+    // picking up from 0 in the next one, so transitions join without a seam.
     move(inBothColumns(next, "photo"), CONFIG.PARALLAX_MEDIA, 0, 1);
     move(inBothColumns(current, "photo"), 0, -CONFIG.PARALLAX_MEDIA, 1);
 
-    // The text block, drifting less than the photo — that difference is what
-    // reads as depth. It takes less than the whole change, so the headline
-    // settles before the wipe does and then holds still.
+    // The text block drifts less than the photo, and finishes early so the
+    // headline settles before the wipe does.
     const span = CONFIG.TEXT_SPAN;
     move(inBothColumns(next, "text"), CONFIG.PARALLAX_COPY, 0, span);
     move(inBothColumns(current, "text"), 0, -CONFIG.PARALLAX_COPY, span);
 
-    // The two halves of the text, sliding past each other and closing back
-    // into one word. The text is cut down the middle, and moving along that
-    // cut rather than across it is what keeps it from opening.
+    // The two halves shear past each other and close back into one word. The
+    // shear runs along the cut, not across it, so the seam never opens.
     move(inBothColumns(next, "textLeft"), CONFIG.SPLIT_SHIFT, 0, span);
     move(inBothColumns(next, "textRight"), -CONFIG.SPLIT_SHIFT, 0, span);
     move(inBothColumns(current, "textLeft"), 0, -CONFIG.SPLIT_SHIFT, span);
@@ -136,8 +121,8 @@ const CONFIG = {
     return change;
   }
 
-  // No match when the visitor has asked for reduced motion, so nothing is
-  // built and the reel stays the plain list of slides that style.css lays out.
+  // Under reduced motion this never matches, so nothing is built and the reel
+  // stays the plain list of slides style.css lays out.
   const mm = gsap.matchMedia();
 
   mm.add("(prefers-reduced-motion: no-preference)", () => {
@@ -156,8 +141,8 @@ const CONFIG = {
       pinSpacing: true,
       anticipatePin: 1,
       invalidateOnRefresh: true,
-      animation: reelTimeline, // how far you have scrolled = how far it has played
-      scrub: CONFIG.SCRUB, // …with this much catch-up lag
+      animation: reelTimeline,
+      scrub: CONFIG.SCRUB,
     });
 
     return () => {
@@ -166,8 +151,7 @@ const CONFIG = {
     };
   });
 
-  // our own height never changes, but the host page's might once photos and
-  // fonts have settled
+  // the host page's height can still change once photos and fonts settle
   function onLoad() {
     ScrollTrigger.refresh();
   }
