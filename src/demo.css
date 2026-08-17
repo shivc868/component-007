@@ -1,10 +1,5 @@
-/* ==========================================================================
-   DEMO PAGE ONLY — do NOT copy this file into your project
-   --------------------------------------------------------------------------
-   Just enough page shell to show the component full-bleed: a dark ground so
-   the pinned frame has no white edge, and no margin around it. The component
-   itself is styled entirely in style.css and carries no global rules.
-   ========================================================================== */
+/* Demo page shell only — dark ground and no margin, so the pinned frame runs
+   full-bleed with no white edge. The component itself lives in style.css. */
 
 body {
   margin: 0;
